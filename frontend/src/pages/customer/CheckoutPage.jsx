@@ -308,46 +308,65 @@ export default function CheckoutPage() {
           </div>
 
           {paymentMethod === 'QR_UPI' && (
-            <div className="card p-4 text-center">
-              <div className="text-sm font-semibold text-stone-700 mb-1">Scan & Pay</div>
-              <div className="text-xs text-stone-400 mb-4">Pay ₹{total.toFixed(0)} before placing your order</div>
+            <div className="card p-4">
+              <div className="text-sm font-semibold text-stone-800 mb-1 text-center">Pay ₹{total.toFixed(0)} via UPI</div>
+              <div className="text-xs text-stone-400 mb-4 text-center">Tap your preferred app — amount is pre-filled</div>
 
-              {/* Real UPI QR Code */}
-              <div className="flex flex-col items-center">
-                <img
-                  src="/upi-qr.jpg"
-                  alt="Absolute Naansense UPI QR"
-                  className="w-56 h-56 object-contain rounded-2xl border border-stone-100 shadow-sm"
-                />
+              {/* UPI Deep Link Buttons */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {/* Google Pay */}
+                <a
+                  href={`gpay://upi/pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR&tn=Order+at+Absolute+Naansense`}
+                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-blue-200 rounded-2xl p-3.5 transition-all active:scale-95"
+                >
+                  <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.9 0 6.6 1.7 8.1 3.1l6-5.8C34.5 3.5 29.7 1 24 1 14.8 1 7 6.8 3.9 14.9l7 5.4C12.6 14 17.8 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.5c0-1.6-.1-2.8-.4-4H24v7.7h12.5c-.5 2.9-2.2 5.4-4.7 7l7.2 5.6c4.2-3.9 6.6-9.6 6.6-16.3z"/><path fill="#FBBC05" d="M10.9 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.1.7-4.6l-7-5.4A23.1 23.1 0 0 0 .9 24c0 3.7.9 7.2 2.4 10.3l7.6-5.7z"/><path fill="#EA4335" d="M24 47c5.7 0 10.5-1.9 14-5.1l-7.2-5.6c-1.9 1.3-4.3 2.1-6.8 2.1-6.2 0-11.4-4.2-13.1-9.8l-7.6 5.7C7 41.2 14.9 47 24 47z"/></svg>
+                  <span className="text-sm font-semibold text-stone-700">Google Pay</span>
+                </a>
+
+                {/* PhonePe */}
+                <a
+                  href={`phonepe://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR&tn=Order+at+Absolute+Naansense`}
+                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-purple-200 rounded-2xl p-3.5 transition-all active:scale-95"
+                >
+                  <svg width="22" height="22" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#5f259f"/><path fill="white" d="M31 15h-7l-8 18h5l2-4h8l1 4h5zm-6 10 3-7 1 7z"/></svg>
+                  <span className="text-sm font-semibold text-stone-700">PhonePe</span>
+                </a>
+
+                {/* Paytm */}
+                <a
+                  href={`paytmmp://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR&tn=Order+at+Absolute+Naansense`}
+                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-sky-200 rounded-2xl p-3.5 transition-all active:scale-95"
+                >
+                  <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#00BAF2"/><text x="7" y="32" fontSize="18" fontWeight="bold" fill="white">Pa</text><text x="24" y="32" fontSize="18" fontWeight="bold" fill="#012970">ytm</text></svg>
+                  <span className="text-sm font-semibold text-stone-700">Paytm</span>
+                </a>
+
+                {/* BHIM / Any UPI */}
+                <a
+                  href={`upi://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR&tn=Order+at+Absolute+Naansense`}
+                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-orange-200 rounded-2xl p-3.5 transition-all active:scale-95"
+                >
+                  <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#FF6B00"/><text x="8" y="30" fontSize="14" fontWeight="bold" fill="white">BHIM</text></svg>
+                  <span className="text-sm font-semibold text-stone-700">BHIM / UPI</span>
+                </a>
               </div>
 
-              {/* UPI details */}
-              <div className="mt-4 bg-stone-50 rounded-xl p-3 text-left space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-stone-400">UPI ID</span>
-                  <span className="text-xs font-semibold text-stone-800 font-mono">8299018895@okbizaxis</span>
+              {/* UPI ID as fallback */}
+              <div className="bg-stone-50 rounded-xl p-3 flex items-center justify-between">
+                <div>
+                  <div className="text-xs text-stone-400">UPI ID (manual)</div>
+                  <div className="text-sm font-mono font-semibold text-stone-800">8299018895@okbizaxis</div>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-stone-400">Name</span>
-                  <span className="text-xs font-semibold text-stone-800">Absolute Naansense</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-stone-400">Amount</span>
-                  <span className="text-sm font-bold text-brand-600">₹{total.toFixed(0)}</span>
-                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText('8299018895@okbizaxis'); toast.success('UPI ID copied!'); }}
+                  className="text-xs text-brand-500 font-medium bg-brand-50 px-3 py-1.5 rounded-lg"
+                >
+                  Copy
+                </button>
               </div>
 
-              {/* UPI app icons */}
-              <div className="flex items-center justify-center gap-3 mt-4">
-                <span className="text-xs text-stone-400">Pay via</span>
-                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">GPay</span>
-                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">PhonePe</span>
-                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">Paytm</span>
-                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">BHIM</span>
-              </div>
-
-              <div className="mt-3 text-xs text-amber-600 bg-amber-50 rounded-xl p-2.5">
-                After paying, tap <strong>"Place order"</strong> below and then <strong>"I've paid"</strong> to notify the restaurant.
+              <div className="mt-3 text-xs text-amber-600 bg-amber-50 rounded-xl p-2.5 text-center">
+                After paying, tap <strong>"Place order"</strong> below and then <strong>"I've paid"</strong>
               </div>
             </div>
           )}
@@ -376,13 +395,21 @@ export default function CheckoutPage() {
                 <p className="text-sm text-stone-500 mb-4">
                   Scan the QR below and pay ₹{paidTotal.toFixed(0)} — then tap "I've paid" so we can confirm your order.
                 </p>
-                {/* QR on confirmation screen */}
-                <img
-                  src="/upi-qr.jpg"
-                  alt="Scan to pay"
-                  className="w-48 h-48 object-contain rounded-xl border border-stone-100 mx-auto mb-3"
-                />
-                <div className="text-xs font-mono text-stone-500 mb-4">8299018895@okbizaxis · ₹{paidTotal.toFixed(0)}</div>
+                {/* UPI buttons on confirmation screen */}
+                <div className="grid grid-cols-2 gap-2 w-full mb-4">
+                  {[
+                    { name: 'Google Pay', scheme: 'gpay', color: 'border-blue-100' },
+                    { name: 'PhonePe', scheme: 'phonepe', color: 'border-purple-100' },
+                    { name: 'Paytm', scheme: 'paytmmp', color: 'border-sky-100' },
+                    { name: 'BHIM / UPI', scheme: 'upi', color: 'border-orange-100' },
+                  ].map(app => (
+                    <a key={app.scheme}
+                      href={`${app.scheme}://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${paidTotal.toFixed(2)}&cu=INR&tn=Order+at+Absolute+Naansense`}
+                      className={`flex items-center justify-center text-xs font-semibold text-stone-700 border-2 ${app.color} bg-white rounded-xl py-2.5 transition-all active:scale-95`}
+                    >{app.name}</a>
+                  ))}
+                </div>
+                <div className="text-xs font-mono text-stone-400 mb-3">8299018895@okbizaxis · ₹{paidTotal.toFixed(0)}</div>
                 <button onClick={handleIvePaid} disabled={notifying} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
                   {notifying ? 'Notifying restaurant…' : "✓ I've paid — notify restaurant"}
                 </button>
