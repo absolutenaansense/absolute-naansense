@@ -1,78 +1,281 @@
-import axios from 'axios'
-import { useAuthStore } from '../store/authStore'
-
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000',
-  timeout: 15000,
-})
-
-// Attach token to every request
-api.interceptors.request.use((config) => {
-  const store = useAuthStore.getState()
-  const token = config.isAdmin ? store.getAdminToken() : store.getToken()
-  if (token) config.headers.Authorization = `Bearer ${token}`
-  return config
-})
-
-// Handle 401 globally
-api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err.response?.status === 401) {
-      useAuthStore.getState().logout()
-      window.location.href = '/login'
-    }
-    return Promise.reject(err)
-  }
-)
-
-export default api
+import { supabase } from './supabase'
+import bcrypt from 'bcryptjs'
 
 // --- Auth ---
 export const authApi = {
-  register: (data) => api.post('/api/auth/register', data),
-  login: (data) => api.post('/api/auth/login', data),
-  me: () => api.get('/api/auth/me'),
-  addAddress: (data) => api.post('/api/auth/addresses', data),
-  deleteAddress: (id) => api.delete(`/api/auth/addresses/${id}`),
-  adminLogin: (data) => api.post('/api/auth/admin/login', data),
+  register: async ({ name, phone, email, password }) => {
+    // Check if phone already exists
+    const { data: existing } = await supabase
+      .from('User')
+      .select('id')
+      .eq('phone', phone)
+      .single()
+    if (existing) throw { response: { data: { error: 'Phone number already registered' } } }
+
+    const passwordHash = await bcrypt.hash(password, 10)
+    const { data, error } = await supabase
+      .from('User')
+      .insert([{ name, phone, email: email || null, passwordHash, isVerified: true }])
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { user: data, token: btoa(JSON.stringify({ id: data.id, phone: data.phone })) } }
+  },
+
+  login: async ({ phone, password }) => {
+    const { data: user, error } = await supabase
+      .from('User')
+      .select('*')
+      .eq('phone', phone)
+      .single()
+    if (error || !user) throw { response: { data: { error: 'Invalid phone or password' } } }
+
+    const valid = await bcrypt.compare(password, user.passwordHash)
+    if (!valid) throw { response: { data: { error: 'Invalid phone or password' } } }
+
+    const token = btoa(JSON.stringify({ id: user.id, phone: user.phone }))
+    return { data: { user, token } }
+  },
+
+  adminLogin: async ({ email, password }) => {
+    const { data: admin, error } = await supabase
+      .from('Admin')
+      .select('*')
+      .eq('email', email)
+      .single()
+    if (error || !admin) throw { response: { data: { error: 'Invalid credentials' } } }
+
+    const valid = await bcrypt.compare(password, admin.passwordHash)
+    if (!valid) throw { response: { data: { error: 'Invalid credentials' } } }
+
+    const token = btoa(JSON.stringify({ id: admin.id, email: admin.email, isAdmin: true }))
+    return { data: { admin, token } }
+  },
+
+  me: async (userId) => {
+    const { data, error } = await supabase
+      .from('User')
+      .select('*')
+      .eq('id', userId)
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
 }
 
 // --- Menu ---
 export const menuApi = {
-  getMenu: () => api.get('/api/menu'),
-  addItem: (data) => api.post('/api/menu/items', { ...data, isAdmin: true }),
-  updateItem: (id, data) => api.patch(`/api/menu/items/${id}`, { ...data, isAdmin: true }),
-  toggleItem: (id) => api.patch(`/api/menu/items/${id}/toggle`, {}, { isAdmin: true }),
+  getMenu: async () => {
+    const { data, error } = await supabase
+      .from('MenuItem')
+      .select('*, category:Category(id, name, sortOrder)')
+      .eq('isAvailable', true)
+      .order('name')
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  getAllItems: async () => {
+    const { data, error } = await supabase
+      .from('MenuItem')
+      .select('*, category:Category(id, name)')
+      .order('name')
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  getCategories: async () => {
+    const { data, error } = await supabase
+      .from('Category')
+      .select('*')
+      .eq('isActive', true)
+      .order('sortOrder')
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  addItem: async (item) => {
+    const { data, error } = await supabase
+      .from('MenuItem')
+      .insert([item])
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  updateItem: async (id, item) => {
+    const { data, error } = await supabase
+      .from('MenuItem')
+      .update({ ...item, updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  toggleItem: async (id) => {
+    const { data: item } = await supabase.from('MenuItem').select('isAvailable').eq('id', id).single()
+    const { data, error } = await supabase
+      .from('MenuItem')
+      .update({ isAvailable: !item.isAvailable, updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
 }
 
 // --- Orders ---
 export const ordersApi = {
-  createOrder: (data) => api.post('/api/orders', data),
-  paymentReceived: (id) => api.post(`/api/orders/${id}/payment-received`),
-  myOrders: () => api.get('/api/orders/my'),
-  getOrder: (id) => api.get(`/api/orders/${id}`),
-  // Admin
-  allOrders: (params) => api.get('/api/orders/admin/all', { params, isAdmin: true }),
-  confirmOrder: (id) => api.post(`/api/orders/${id}/confirm`, {}, { isAdmin: true }),
-  cancelOrder: (id, reason) => api.post(`/api/orders/${id}/cancel`, { reason }, { isAdmin: true }),
-  updateStatus: (id, status) => api.patch(`/api/orders/${id}/status`, { status }, { isAdmin: true }),
+  createOrder: async ({ userId, items, paymentMethod, total, notes, tableId }) => {
+    // Create order
+    const { data: order, error: orderError } = await supabase
+      .from('Order')
+      .insert([{ userId, paymentMethod, total, notes, tableId: tableId || null, status: 'pending', paymentStatus: paymentMethod === 'cod' ? 'pending' : 'pending' }])
+      .select()
+      .single()
+    if (orderError) throw { response: { data: { error: orderError.message } } }
+
+    // Create order items
+    const orderItems = items.map(item => ({
+      orderId: order.id,
+      menuItemId: item.menuItemId,
+      quantity: item.quantity,
+      price: item.price,
+    }))
+    const { error: itemsError } = await supabase.from('OrderItem').insert(orderItems)
+    if (itemsError) throw { response: { data: { error: itemsError.message } } }
+
+    return { data: order }
+  },
+
+  myOrders: async (userId) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .select('*, items:OrderItem(*, menuItem:MenuItem(name, price))')
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  getOrder: async (id) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .select('*, items:OrderItem(*, menuItem:MenuItem(name, price)), user:User(name, phone)')
+      .eq('id', id)
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  allOrders: async () => {
+    const { data, error } = await supabase
+      .from('Order')
+      .select('*, items:OrderItem(*, menuItem:MenuItem(name)), user:User(name, phone)')
+      .order('createdAt', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  confirmOrder: async (id) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ status: 'confirmed', paymentStatus: 'paid', updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    // Mark user as returning customer
+    if (data?.userId) {
+      await supabase.from('User').update({ isReturning: true }).eq('id', data.userId)
+    }
+    return { data }
+  },
+
+  cancelOrder: async (id) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ status: 'cancelled', updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  updateStatus: async (id, status) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ status, updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
 }
 
 // --- Reservations ---
 export const reservationsApi = {
-  create: (data) => api.post('/api/reservations', data),
-  getTables: () => api.get('/api/reservations/tables'),
-  checkAvailability: (date, timeSlot) => api.get('/api/reservations/availability', { params: { date, timeSlot } }),
-  // Admin
-  all: (params) => api.get('/api/reservations', { params, isAdmin: true }),
-  update: (id, data) => api.patch(`/api/reservations/${id}`, data, { isAdmin: true }),
-  cancel: (id) => api.delete(`/api/reservations/${id}`, { isAdmin: true }),
+  create: async (data) => {
+    const { data: res, error } = await supabase
+      .from('Reservation')
+      .insert([data])
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: res }
+  },
+
+  getTables: async () => {
+    const { data, error } = await supabase
+      .from('Table')
+      .select('*')
+      .eq('isActive', true)
+      .order('number')
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  all: async () => {
+    const { data, error } = await supabase
+      .from('Reservation')
+      .select('*, user:User(name, phone), table:Table(number, capacity)')
+      .order('date', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  update: async (id, updates) => {
+    const { data, error } = await supabase
+      .from('Reservation')
+      .update({ ...updates, updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
 }
 
 // --- Admin ---
 export const adminApi = {
-  dashboard: () => api.get('/api/admin/dashboard', { isAdmin: true }),
-  updateFcmToken: (token) => api.patch('/api/admin/fcm-token', { fcmToken: token }, { isAdmin: true }),
-  testPetpooja: () => api.post('/api/petpooja/test', {}, { isAdmin: true }),
+  dashboard: async () => {
+    const [orders, users, reservations] = await Promise.all([
+      supabase.from('Order').select('id, total, status, createdAt').order('createdAt', { ascending: false }).limit(10),
+      supabase.from('User').select('id', { count: 'exact' }),
+      supabase.from('Reservation').select('id, date, status').gte('date', new Date().toISOString().split('T')[0]).limit(5),
+    ])
+    return {
+      data: {
+        recentOrders: orders.data || [],
+        totalUsers: users.count || 0,
+        upcomingReservations: reservations.data || [],
+      }
+    }
+  },
 }
