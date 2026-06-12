@@ -303,12 +303,46 @@ export default function CheckoutPage() {
 
           {paymentMethod === 'QR_UPI' && (
             <div className="card p-4 text-center">
-              <div className="text-xs text-stone-500 mb-3">Scan to pay ₹{total.toFixed(0)}</div>
-              <div className="w-40 h-40 bg-stone-100 rounded-2xl mx-auto flex items-center justify-center mb-3">
-                <QrCode size={80} className="text-stone-400" />
+              <div className="text-sm font-semibold text-stone-700 mb-1">Scan & Pay</div>
+              <div className="text-xs text-stone-400 mb-4">Pay ₹{total.toFixed(0)} before placing your order</div>
+
+              {/* Real UPI QR Code */}
+              <div className="flex flex-col items-center">
+                <img
+                  src="/upi-qr.jpg"
+                  alt="Absolute Naansense UPI QR"
+                  className="w-56 h-56 object-contain rounded-2xl border border-stone-100 shadow-sm"
+                />
               </div>
-              <div className="text-sm font-semibold text-stone-900">absolutenaansense@okaxis</div>
-              <div className="text-xs text-stone-400 mt-1">After paying, tap "Place order" and then "I've paid"</div>
+
+              {/* UPI details */}
+              <div className="mt-4 bg-stone-50 rounded-xl p-3 text-left space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-stone-400">UPI ID</span>
+                  <span className="text-xs font-semibold text-stone-800 font-mono">8299018895@okbizaxis</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-stone-400">Name</span>
+                  <span className="text-xs font-semibold text-stone-800">Absolute Naansense</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-xs text-stone-400">Amount</span>
+                  <span className="text-sm font-bold text-brand-600">₹{total.toFixed(0)}</span>
+                </div>
+              </div>
+
+              {/* UPI app icons */}
+              <div className="flex items-center justify-center gap-3 mt-4">
+                <span className="text-xs text-stone-400">Pay via</span>
+                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">GPay</span>
+                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">PhonePe</span>
+                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">Paytm</span>
+                <span className="text-xs font-medium text-stone-600 bg-stone-100 px-2 py-1 rounded-lg">BHIM</span>
+              </div>
+
+              <div className="mt-3 text-xs text-amber-600 bg-amber-50 rounded-xl p-2.5">
+                After paying, tap <strong>"Place order"</strong> below and then <strong>"I've paid"</strong> to notify the restaurant.
+              </div>
             </div>
           )}
 
@@ -332,13 +366,19 @@ export default function CheckoutPage() {
             {paymentMethod === 'QR_UPI' ? (
               <>
                 <Clock size={40} className="text-amber-500 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-stone-900 mb-1">Order placed!</h3>
+                <h3 className="text-lg font-semibold text-stone-900 mb-1">Order placed! Now pay to confirm.</h3>
                 <p className="text-sm text-stone-500 mb-4">
-                  Tap below after paying via UPI/QR so the restaurant can confirm your order.
+                  Scan the QR below and pay ₹{total.toFixed(0)} — then tap "I've paid" so we can confirm your order.
                 </p>
+                {/* QR on confirmation screen */}
+                <img
+                  src="/upi-qr.jpg"
+                  alt="Scan to pay"
+                  className="w-48 h-48 object-contain rounded-xl border border-stone-100 mx-auto mb-3"
+                />
+                <div className="text-xs font-mono text-stone-500 mb-4">8299018895@okbizaxis · ₹{total.toFixed(0)}</div>
                 <button onClick={handleIvePaid} disabled={notifying} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
-                  {notifying ? 'Notifying restaurant…' : "I've paid — notify restaurant"}
-                  <Check size={16} />
+                  {notifying ? 'Notifying restaurant…' : "✓ I've paid — notify restaurant"}
                 </button>
               </>
             ) : (
