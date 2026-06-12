@@ -5,7 +5,7 @@ import toast from 'react-hot-toast'
 import { useNavigate } from 'react-router-dom'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { useAuthStore } from '../../store/authStore'
-import { authApi } from '../../services/api'
+import { addressApi } from '../../services/api'
 
 export default function ProfilePage() {
   const { user, logout } = useAuthStore()
@@ -13,16 +13,19 @@ export default function ProfilePage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newAddr, setNewAddr] = useState({ label: 'Home', line1: '', line2: '', city: '', pincode: '' })
 
-  const { data, refetch } = useQuery({
-    queryKey: ['profile'],
-    queryFn: () => authApi.me().then(r => r.data),
+  const { data: addresses = [], refetch } = useQuery({
+    queryKey: ['addresses', user?.id],
+    queryFn: () => addressApi.getAddresses(user?.id).then(r => r.data),
+    enabled: !!user?.id,
   })
 
-  const addresses = data?.user?.addresses || []
-
   const handleAddAddress = async () => {
+    if (!newAddr.line1 || !newAddr.city || !newAddr.pincode) {
+      toast.error('Please fill in all required fields')
+      return
+    }
     try {
-      await authApi.addAddress(newAddr)
+      await addressApi.addAddress({ userId: user.id, ...newAddr })
       await refetch()
       setShowAdd(false)
       setNewAddr({ label: 'Home', line1: '', line2: '', city: '', pincode: '' })
@@ -32,7 +35,7 @@ export default function ProfilePage() {
 
   const handleDelete = async (id) => {
     try {
-      await authApi.deleteAddress(id)
+      await addressApi.deleteAddress(id)
       await refetch()
       toast.success('Address removed')
     } catch { toast.error('Failed to remove address') }
@@ -60,9 +63,9 @@ export default function ProfilePage() {
             <div className="flex items-center gap-2 text-sm text-stone-600">
               <Phone size={14} className="text-stone-400" /> {user?.phone}
             </div>
-            {data?.user?.email && (
+            {user?.email && (
               <div className="flex items-center gap-2 text-sm text-stone-600">
-                <Mail size={14} className="text-stone-400" /> {data.user.email}
+                <Mail size={14} className="text-stone-400" /> {user.email}
               </div>
             )}
           </div>

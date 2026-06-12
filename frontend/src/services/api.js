@@ -279,3 +279,35 @@ export const adminApi = {
     }
   },
 }
+
+// --- Addresses (added separately to User profile) ---
+export const addressApi = {
+  addAddress: async ({ userId, label, line1, line2, city, pincode }) => {
+    const { data, error } = await supabase
+      .from('Address')
+      .insert([{ userId, label, line1, line2: line2 || null, city, pincode }])
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  getAddresses: async (userId) => {
+    const { data, error } = await supabase
+      .from('Address')
+      .select('*')
+      .eq('userId', userId)
+      .order('createdAt', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  deleteAddress: async (id) => {
+    const { error } = await supabase
+      .from('Address')
+      .delete()
+      .eq('id', id)
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { success: true } }
+  },
+}
