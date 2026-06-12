@@ -80,13 +80,15 @@ export default function CheckoutPage() {
     setConfirming(true)
     try {
       const { data } = await ordersApi.createOrder({
+        userId: user.id,
         items: getOrderItems(),
         addressId: selectedAddressId,
         type: orderType,
         paymentMethod,
+        total,
         notes: '',
       })
-      setPlacedOrder(data.order)
+      setPlacedOrder(data)
       setStep(2)
       clearCart()
     } catch (err) {
@@ -390,7 +392,7 @@ export default function CheckoutPage() {
 
             <div className="mt-5 bg-stone-50 rounded-xl p-4 text-left">
               <div className="text-xs text-stone-400 mb-2">Order reference</div>
-              <div className="font-mono font-semibold text-stone-800">{placedOrder.orderNumber}</div>
+              <div className="font-mono font-semibold text-stone-800">{placedOrder.id?.substring(0,8).toUpperCase()}</div>
             </div>
           </div>
 

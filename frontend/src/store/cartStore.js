@@ -48,6 +48,7 @@ export const useCartStore = create(
         return Object.values(get().items).map(({ item, quantity }) => ({
           menuItemId: item.id,
           quantity,
+          price: parseFloat(item.price),
         }))
       },
     }),
