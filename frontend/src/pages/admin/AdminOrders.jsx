@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, X, ChevronDown, RefreshCw, Printer } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, X, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { format } from 'date-fns'
 import AdminLayout from '../../components/admin/AdminLayout'
@@ -8,128 +8,166 @@ import { ordersApi } from '../../services/api'
 
 const STATUS_FILTERS = [
   { value: '', label: 'All orders' },
-  { value: 'PAYMENT_RECEIVED', label: 'Awaiting confirm' },
-  { value: 'CONFIRMED', label: 'Confirmed' },
-  { value: 'PREPARING', label: 'Preparing' },
-  { value: 'OUT_FOR_DELIVERY', label: 'Out for delivery' },
-  { value: 'DELIVERED', label: 'Delivered' },
-  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'payment_received', label: 'Awaiting confirm' },
+  { value: 'confirmed', label: 'Confirmed' },
+  { value: 'preparing', label: 'Preparing' },
+  { value: 'out_for_delivery', label: 'Out for delivery' },
+  { value: 'delivered', label: 'Delivered' },
+  { value: 'cancelled', label: 'Cancelled' },
 ]
 
 const STATUS_NEXT = {
-  CONFIRMED: 'PREPARING',
-  PREPARING: 'OUT_FOR_DELIVERY',
-  OUT_FOR_DELIVERY: 'DELIVERED',
+  confirmed: 'preparing',
+  preparing: 'out_for_delivery',
+  out_for_delivery: 'delivered',
 }
 
 const statusStyle = {
-  PENDING_PAYMENT: 'bg-stone-100 text-stone-600',
-  PAYMENT_RECEIVED: 'bg-amber-100 text-amber-700',
-  CONFIRMED: 'bg-blue-100 text-blue-700',
-  PREPARING: 'bg-brand-100 text-brand-700',
-  OUT_FOR_DELIVERY: 'bg-purple-100 text-purple-700',
-  DELIVERED: 'bg-green-100 text-green-700',
-  CANCELLED: 'bg-red-100 text-red-600',
+  pending: 'bg-stone-100 text-stone-600',
+  payment_received: 'bg-amber-100 text-amber-700',
+  confirmed: 'bg-blue-100 text-blue-700',
+  preparing: 'bg-orange-100 text-orange-700',
+  out_for_delivery: 'bg-purple-100 text-purple-700',
+  delivered: 'bg-green-100 text-green-700',
+  cancelled: 'bg-red-100 text-red-600',
 }
 
-function OrderCard({ order, onConfirm, onCancel, onStatusUpdate, loading }) {
-  const [expanded, setExpanded] = useState(false)
-  const statusLabel = order.status.replace(/_/g, ' ').toLowerCase()
+const statusLabel = (s) => ({
+  pending: 'Awaiting payment',
+  payment_received: 'Payment received — confirm?',
+  confirmed: 'Confirmed',
+  preparing: 'Preparing',
+  out_for_delivery: 'Out for delivery',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+}[s] || s)
+
+function OrderCard({ order, refetch }) {
+  const [expanded, setExpanded] = useState(order.status === 'payment_received')
+  const [loading, setLoading] = useState(false)
   const nextStatus = STATUS_NEXT[order.status]
 
+  const handleConfirm = async () => {
+    setLoading(true)
+    try {
+      await ordersApi.confirmOrder(order.id)
+      toast.success('Order confirmed!')
+      refetch()
+    } catch { toast.error('Failed to confirm') }
+    finally { setLoading(false) }
+  }
+
+  const handleCancel = async () => {
+    setLoading(true)
+    try {
+      await ordersApi.cancelOrder(order.id)
+      toast.success('Order cancelled')
+      refetch()
+    } catch { toast.error('Failed to cancel') }
+    finally { setLoading(false) }
+  }
+
+  const handleAdvance = async () => {
+    setLoading(true)
+    try {
+      await ordersApi.updateStatus(order.id, nextStatus)
+      toast.success(`Marked as ${statusLabel(nextStatus)}`)
+      refetch()
+    } catch { toast.error('Failed to update') }
+    finally { setLoading(false) }
+  }
+
   return (
-    <div className="card mb-3 overflow-hidden">
+    <div className={`card mb-3 overflow-hidden ${order.status === 'payment_received' ? 'border-2 border-amber-300' : ''}`}>
       <div
-        className="flex items-center justify-between p-4 cursor-pointer hover:bg-stone-50 transition-colors"
+        className="flex items-center justify-between p-4 cursor-pointer hover:bg-stone-50"
         onClick={() => setExpanded(e => !e)}
       >
-        <div className="flex items-center gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-sm font-semibold text-stone-800">{order.orderNumber}</span>
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyle[order.status]}`}>
-                {statusLabel}
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="font-mono text-sm font-semibold text-stone-800">
+              #{order.id?.substring(0, 8).toUpperCase()}
+            </span>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyle[order.status] || 'bg-stone-100 text-stone-600'}`}>
+              {statusLabel(order.status)}
+            </span>
+            {order.status === 'payment_received' && (
+              <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">
+                Action needed
               </span>
-            </div>
-            <div className="text-xs text-stone-400 mt-0.5">
-              {order.user.name} · {order.user.phone} · {format(new Date(order.createdAt), 'dd MMM, h:mm a')}
-            </div>
+            )}
+          </div>
+          <div className="text-xs text-stone-400">
+            {order.user?.name} · {order.user?.phone} · {format(new Date(order.createdAt), 'dd MMM, h:mm a')}
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</div>
-            <div className="text-xs text-stone-400">{order.paymentMethod === 'QR_UPI' ? 'UPI' : 'COD'}</div>
-          </div>
-          <ChevronDown size={16} className={`text-stone-400 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          <span className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
+          {expanded ? <ChevronUp size={16} className="text-stone-400" /> : <ChevronDown size={16} className="text-stone-400" />}
         </div>
       </div>
 
       {expanded && (
-        <div className="border-t border-stone-100 px-4 pb-4 pt-3">
+        <div className="border-t border-stone-100 p-4 space-y-4">
           {/* Items */}
-          <div className="mb-4">
-            <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Items</div>
-            <div className="space-y-1.5">
-              {order.items.map(item => (
+          <div>
+            <div className="text-xs font-semibold text-stone-400 uppercase mb-2">Items</div>
+            <div className="space-y-1">
+              {order.items?.map(item => (
                 <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-stone-700">{item.menuItem.name} × {item.quantity}</span>
-                  <span className="text-stone-900 font-medium">₹{parseFloat(item.subtotal).toFixed(0)}</span>
+                  <span className="text-stone-700">{item.menuItem?.name} × {item.quantity}</span>
+                  <span className="text-stone-900 font-medium">₹{(parseFloat(item.price) * item.quantity).toFixed(0)}</span>
                 </div>
               ))}
-              <div className="flex justify-between text-sm text-stone-500 pt-1 border-t border-stone-50">
-                <span>Delivery fee</span><span>₹{parseFloat(order.deliveryFee).toFixed(0)}</span>
-              </div>
-              <div className="flex justify-between text-sm font-semibold text-stone-900">
-                <span>Total</span><span>₹{parseFloat(order.total).toFixed(0)}</span>
-              </div>
+            </div>
+            <div className="flex justify-between text-sm font-semibold border-t border-stone-100 mt-2 pt-2">
+              <span>Total</span>
+              <span>₹{parseFloat(order.total).toFixed(0)}</span>
             </div>
           </div>
 
-          {/* Delivery address */}
-          {order.address && (
-            <div className="mb-4">
-              <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-1">Delivery to</div>
-              <div className="text-sm text-stone-700">
-                {order.address.line1}{order.address.line2 ? `, ${order.address.line2}` : ''}, {order.address.city} — {order.address.pincode}
-              </div>
-            </div>
-          )}
+          {/* Payment info */}
+          <div className="bg-stone-50 rounded-xl p-3 text-xs text-stone-500 flex justify-between">
+            <span>Payment: <strong>{order.paymentMethod === 'QR_UPI' ? 'UPI / Prepaid' : 'Cash on delivery'}</strong></span>
+            <span>Status: <strong className={order.paymentStatus === 'paid' ? 'text-green-600' : 'text-amber-600'}>{order.paymentStatus}</strong></span>
+          </div>
 
-          {/* PetPooja status */}
-          {order.petpoojaOrderId && (
-            <div className="bg-stone-900 text-green-400 rounded-xl px-3 py-2 text-xs font-mono mb-4 flex items-center gap-2">
-              <Printer size={12} /> KOT sent to PetPooja · {order.petpoojaOrderId}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="flex gap-2 flex-wrap">
-            {order.status === 'PAYMENT_RECEIVED' && (
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            {order.status === 'payment_received' && (
               <>
                 <button
-                  onClick={() => onConfirm(order.id)}
+                  onClick={handleConfirm}
                   disabled={loading}
-                  className="btn-primary py-2 text-sm"
+                  className="flex-1 btn-primary justify-center py-2.5 rounded-xl"
                 >
-                  <Check size={15} /> Confirm & send KOT
+                  <Check size={15} /> Confirm order
                 </button>
                 <button
-                  onClick={() => onCancel(order.id)}
+                  onClick={handleCancel}
                   disabled={loading}
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition-all"
+                  className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm font-medium"
                 >
-                  <X size={15} /> Reject
+                  <X size={15} />
                 </button>
               </>
             )}
-            {nextStatus && (
+            {nextStatus && order.status !== 'payment_received' && (
               <button
-                onClick={() => onStatusUpdate(order.id, nextStatus)}
+                onClick={handleAdvance}
                 disabled={loading}
-                className="btn-secondary py-2 text-sm"
+                className="flex-1 btn-primary justify-center py-2.5 rounded-xl"
               >
-                Mark as {nextStatus.replace(/_/g, ' ').toLowerCase()} →
+                Mark as {statusLabel(nextStatus)}
+              </button>
+            )}
+            {['confirmed', 'preparing', 'out_for_delivery'].includes(order.status) && (
+              <button
+                onClick={handleCancel}
+                disabled={loading}
+                className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm font-medium"
+              >
+                Cancel
               </button>
             )}
           </div>
@@ -140,78 +178,60 @@ function OrderCard({ order, onConfirm, onCancel, onStatusUpdate, loading }) {
 }
 
 export default function AdminOrders() {
-  const [statusFilter, setStatusFilter] = useState('')
+  const [filter, setFilter] = useState('')
   const queryClient = useQueryClient()
 
-  const { data, isLoading, refetch } = useQuery({
-    queryKey: ['admin-orders', statusFilter],
-    queryFn: () => ordersApi.allOrders({ status: statusFilter || undefined }).then(r => r.data),
-    refetchInterval: 20000,
+  const { data: orders = [], isLoading, refetch } = useQuery({
+    queryKey: ['admin-orders'],
+    queryFn: () => ordersApi.allOrders().then(r => r.data),
+    refetchInterval: 15000, // auto-refresh every 15 seconds
   })
 
-  const { mutate: confirmOrder, isPending: confirming } = useMutation({
-    mutationFn: (id) => ordersApi.confirmOrder(id),
-    onSuccess: () => {
-      toast.success('Order confirmed & KOT sent to PetPooja!')
-      queryClient.invalidateQueries(['admin-orders'])
-      queryClient.invalidateQueries(['admin-stats'])
-    },
-    onError: () => toast.error('Failed to confirm order'),
-  })
-
-  const { mutate: cancelOrder } = useMutation({
-    mutationFn: (id) => ordersApi.cancelOrder(id),
-    onSuccess: () => { toast.success('Order cancelled'); queryClient.invalidateQueries(['admin-orders']) },
-  })
-
-  const { mutate: updateStatus } = useMutation({
-    mutationFn: ({ id, status }) => ordersApi.updateStatus(id, status),
-    onSuccess: () => { queryClient.invalidateQueries(['admin-orders']) },
-    onError: () => toast.error('Failed to update status'),
-  })
-
-  const pendingCount = data?.orders?.filter(o => o.status === 'PAYMENT_RECEIVED').length || 0
+  const filtered = filter ? orders.filter(o => o.status === filter) : orders
+  const pendingCount = orders.filter(o => o.status === 'payment_received').length
 
   return (
-    <AdminLayout title="Orders">
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex gap-2 flex-wrap">
-          {STATUS_FILTERS.map(f => (
-            <button
-              key={f.value}
-              onClick={() => setStatusFilter(f.value)}
-              className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-all ${
-                statusFilter === f.value
-                  ? 'bg-stone-900 text-white'
-                  : 'bg-white border border-stone-200 text-stone-600 hover:border-stone-300'
-              }`}
-            >
-              {f.label}
-              {f.value === 'PAYMENT_RECEIVED' && pendingCount > 0 && (
-                <span className="ml-1.5 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5">{pendingCount}</span>
-              )}
-            </button>
-          ))}
+    <AdminLayout>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h2 className="text-lg font-semibold text-stone-900">Orders</h2>
+          {pendingCount > 0 && (
+            <p className="text-sm text-amber-600 font-medium">{pendingCount} order{pendingCount > 1 ? 's' : ''} awaiting confirmation</p>
+          )}
         </div>
-        <button onClick={() => refetch()} className="btn-ghost">
-          <RefreshCw size={15} /> Refresh
+        <button onClick={() => refetch()} className="btn-ghost text-stone-500 text-sm">
+          <RefreshCw size={14} /> Refresh
         </button>
       </div>
 
+      {/* Filters */}
+      <div className="flex gap-2 flex-wrap mb-4">
+        {STATUS_FILTERS.map(f => (
+          <button
+            key={f.value}
+            onClick={() => setFilter(f.value)}
+            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+              filter === f.value
+                ? 'bg-stone-900 text-white border-stone-900'
+                : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
+            }`}
+          >
+            {f.label}
+            {f.value === 'payment_received' && pendingCount > 0 && (
+              <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-xs">{pendingCount}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Orders list */}
       {isLoading ? (
-        <div className="text-center py-16 text-stone-400 text-sm">Loading orders…</div>
-      ) : !data?.orders?.length ? (
-        <div className="text-center py-16 text-stone-400 text-sm">No orders found.</div>
+        <div className="text-center py-16 text-stone-400">Loading orders…</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center py-16 text-stone-400">No orders found.</div>
       ) : (
-        data.orders.map(order => (
-          <OrderCard
-            key={order.id}
-            order={order}
-            onConfirm={confirmOrder}
-            onCancel={cancelOrder}
-            onStatusUpdate={(id, status) => updateStatus({ id, status })}
-            loading={confirming}
-          />
+        filtered.map(order => (
+          <OrderCard key={order.id} order={order} refetch={refetch} />
         ))
       )}
     </AdminLayout>

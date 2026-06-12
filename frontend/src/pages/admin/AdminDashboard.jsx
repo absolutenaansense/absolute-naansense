@@ -1,8 +1,19 @@
 import { useQuery } from '@tanstack/react-query'
-import { ShoppingBag, IndianRupee, Users, Clock, TrendingUp } from 'lucide-react'
+import { ShoppingBag, IndianRupee, Users, Clock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
-import { adminApi, ordersApi } from '../../services/api'
+import { ordersApi } from '../../services/api'
+import { format } from 'date-fns'
+
+const statusColors = {
+  pending: 'bg-stone-100 text-stone-600',
+  payment_received: 'bg-amber-100 text-amber-700',
+  confirmed: 'bg-blue-100 text-blue-700',
+  preparing: 'bg-orange-100 text-orange-700',
+  out_for_delivery: 'bg-purple-100 text-purple-700',
+  delivered: 'bg-green-100 text-green-700',
+  cancelled: 'bg-red-100 text-red-600',
+}
 
 function StatCard({ label, value, icon: Icon, accent }) {
   return (
@@ -12,106 +23,67 @@ function StatCard({ label, value, icon: Icon, accent }) {
           <Icon size={18} className="text-white" />
         </div>
       </div>
-      <div className="text-2xl font-semibold text-stone-900">{value}</div>
+      <div className="text-2xl font-semibold text-stone-900">{value ?? '—'}</div>
       <div className="text-sm text-stone-500 mt-0.5">{label}</div>
     </div>
   )
 }
 
-function OrderRow({ order }) {
-  const statusColors = {
-    PAYMENT_RECEIVED: 'bg-amber-50 text-amber-700',
-    CONFIRMED: 'bg-green-50 text-green-700',
-    PREPARING: 'bg-blue-50 text-blue-700',
-    PENDING_PAYMENT: 'bg-stone-100 text-stone-600',
-  }
-
-  return (
-    <div className="flex items-center justify-between py-3 border-b border-stone-50 last:border-0">
-      <div>
-        <div className="text-sm font-medium text-stone-800">{order.orderNumber}</div>
-        <div className="text-xs text-stone-400">{order.user.name} · {order.items.map(i => i.menuItem.name).slice(0, 2).join(', ')}</div>
-      </div>
-      <div className="flex items-center gap-2">
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[order.status] || 'bg-stone-100 text-stone-600'}`}>
-          {order.status.replace(/_/g, ' ').toLowerCase()}
-        </span>
-        <span className="text-sm font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
-      </div>
-    </div>
-  )
-}
-
 export default function AdminDashboard() {
-  const { data: stats } = useQuery({
-    queryKey: ['admin-stats'],
-    queryFn: () => adminApi.dashboard().then(r => r.data.stats),
-    refetchInterval: 30000,
-  })
-
-  const { data: ordersData } = useQuery({
-    queryKey: ['admin-orders-recent'],
-    queryFn: () => ordersApi.allOrders({ page: 1 }).then(r => r.data),
+  const { data: orders = [], refetch } = useQuery({
+    queryKey: ['admin-orders'],
+    queryFn: () => ordersApi.allOrders().then(r => r.data),
     refetchInterval: 15000,
   })
 
+  const today = new Date().toDateString()
+  const todayOrders = orders.filter(o => new Date(o.createdAt).toDateString() === today)
+  const todayRevenue = todayOrders.filter(o => o.paymentStatus === 'paid').reduce((s, o) => s + parseFloat(o.total), 0)
+  const pendingConfirm = orders.filter(o => o.status === 'payment_received').length
+  const totalCustomers = new Set(orders.map(o => o.userId)).size
+
   return (
-    <AdminLayout title="Dashboard">
-      {stats?.pendingOrders > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium text-amber-800">
-              {stats.pendingOrders} order{stats.pendingOrders > 1 ? 's' : ''} awaiting payment confirmation
-            </span>
-          </div>
-          <Link to="/admin/orders" className="text-xs font-medium text-amber-700 hover:text-amber-900 underline">
-            Review →
-          </Link>
-        </div>
+    <AdminLayout>
+      <h2 className="text-lg font-semibold text-stone-900 mb-4">Dashboard</h2>
+
+      {pendingConfirm > 0 && (
+        <Link to="/admin/orders" className="block mb-4 bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-700 font-medium">
+          🔔 {pendingConfirm} order{pendingConfirm > 1 ? 's' : ''} awaiting your confirmation → Go to Orders
+        </Link>
       )}
 
-      <div className="grid grid-cols-4 gap-4 mb-6">
-        <StatCard label="Orders today" value={stats?.ordersToday ?? '—'} icon={ShoppingBag} accent="bg-brand-500" />
-        <StatCard label="Revenue today" value={stats?.revenueToday ? `₹${parseFloat(stats.revenueToday).toFixed(0)}` : '₹0'} icon={IndianRupee} accent="bg-green-500" />
-        <StatCard label="Pending confirm" value={stats?.pendingOrders ?? 0} icon={Clock} accent="bg-amber-500" />
-        <StatCard label="Total customers" value={stats?.totalUsers ?? '—'} icon={Users} accent="bg-blue-500" />
+      <div className="grid grid-cols-2 gap-3 mb-6">
+        <StatCard label="Orders today" value={todayOrders.length} icon={ShoppingBag} accent="bg-brand-500" />
+        <StatCard label="Revenue today" value={`₹${todayRevenue.toFixed(0)}`} icon={IndianRupee} accent="bg-green-500" />
+        <StatCard label="Pending confirm" value={pendingConfirm} icon={Clock} accent="bg-amber-500" />
+        <StatCard label="Total customers" value={totalCustomers} icon={Users} accent="bg-blue-500" />
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="col-span-2 card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-stone-700">Recent orders</h2>
-            <Link to="/admin/orders" className="text-xs text-brand-500 hover:text-brand-600">View all →</Link>
-          </div>
-          {ordersData?.orders?.length ? (
-            ordersData.orders.slice(0, 8).map(o => <OrderRow key={o.id} order={o} />)
-          ) : (
-            <div className="text-center py-8 text-stone-400 text-sm">No orders yet</div>
-          )}
+      <div className="card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider">Recent orders</div>
+          <Link to="/admin/orders" className="text-xs text-brand-500 font-medium">View all →</Link>
         </div>
-
-        <div className="space-y-4">
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-stone-700 mb-3">Quick actions</h2>
-            <div className="space-y-2">
-              <Link to="/admin/orders" className="flex items-center gap-2 p-2.5 rounded-xl hover:bg-stone-50 text-sm text-stone-600 transition-colors">
-                <ShoppingBag size={15} className="text-stone-400" /> Manage orders
-              </Link>
-              <Link to="/admin/reservations" className="flex items-center gap-2 p-2.5 rounded-xl hover:bg-stone-50 text-sm text-stone-600 transition-colors">
-                📅 Reservations
-              </Link>
-              <Link to="/admin/menu" className="flex items-center gap-2 p-2.5 rounded-xl hover:bg-stone-50 text-sm text-stone-600 transition-colors">
-                🍽️ Manage menu
-              </Link>
+        {orders.length === 0 ? (
+          <p className="text-sm text-stone-400 text-center py-6">No orders yet</p>
+        ) : (
+          orders.slice(0, 8).map(order => (
+            <div key={order.id} className="flex items-center justify-between py-3 border-b border-stone-50 last:border-0">
+              <div>
+                <div className="text-sm font-medium text-stone-800">#{order.id?.substring(0,8).toUpperCase()}</div>
+                <div className="text-xs text-stone-400">
+                  {order.user?.name} · {format(new Date(order.createdAt), 'h:mm a')}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[order.status] || 'bg-stone-100 text-stone-600'}`}>
+                  {order.status?.replace(/_/g, ' ')}
+                </span>
+                <span className="text-sm font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
+              </div>
             </div>
-          </div>
-          <div className="card p-5">
-            <h2 className="text-sm font-semibold text-stone-700 mb-2">This month</h2>
-            <div className="text-2xl font-semibold text-stone-900">{stats?.ordersThisMonth ?? 0}</div>
-            <div className="text-xs text-stone-400">total orders</div>
-          </div>
-        </div>
+          ))
+        )}
       </div>
     </AdminLayout>
   )
