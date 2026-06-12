@@ -93,6 +93,7 @@ export default function CheckoutPage() {
       setPaidTotal(total)
       setStep(2)
       clearCart()
+      setTimeout(() => clearCart(), 100) // delay to avoid nav race
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to place order')
     } finally {
