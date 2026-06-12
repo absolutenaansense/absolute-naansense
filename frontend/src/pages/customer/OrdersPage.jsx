@@ -3,7 +3,9 @@ import { ordersApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { format } from 'date-fns'
-import { Package, Clock, CheckCircle2, Truck, XCircle } from 'lucide-react'
+import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
+import { useState } from 'react'
 
 const statusConfig = {
   pending: { label: 'Awaiting payment', icon: Clock, color: 'text-amber-600 bg-amber-50' },
@@ -18,25 +20,42 @@ const statusConfig = {
 function OrderCard({ order }) {
   const cfg = statusConfig[order.status] || statusConfig.pending
   const Icon = cfg.icon
+  const [expanded, setExpanded] = useState(false)
+  const isActive = !['delivered', 'cancelled'].includes(order.status)
+
   return (
-    <div className="card p-4 mb-3">
-      <div className="flex items-start justify-between mb-3">
-        <div>
-          <div className="font-mono text-sm font-semibold text-stone-700">#{order.id?.substring(0,8).toUpperCase()}</div>
-          <div className="text-xs text-stone-400 mt-0.5">{format(new Date(order.createdAt), 'dd MMM yyyy · h:mm a')}</div>
+    <div className="card mb-3 overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <div className="font-mono text-sm font-semibold text-stone-700">#{order.id?.substring(0,8).toUpperCase()}</div>
+            <div className="text-xs text-stone-400 mt-0.5">{format(new Date(order.createdAt), 'dd MMM yyyy · h:mm a')}</div>
+          </div>
+          <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.color}`}>
+            <Icon size={12} /> {cfg.label}
+          </span>
         </div>
-        <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.color}`}>
-          <Icon size={12} /> {cfg.label}
-        </span>
+        <div className="text-sm text-stone-600 mb-3">
+          {order.items?.slice(0, 2).map(i => `${i.menuItem?.name} × ${i.quantity}`).join(', ')}
+          {order.items?.length > 2 && ` +${order.items.length - 2} more`}
+        </div>
+        <div className="flex items-center justify-between border-t border-stone-50 pt-3">
+          <span className="text-xs text-stone-500">{order.paymentMethod === 'QR_UPI' ? 'UPI · Prepaid' : 'Cash on delivery'}</span>
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
+            {isActive && (
+              <button onClick={() => setExpanded(e => !e)} className="text-brand-500 text-xs flex items-center gap-0.5">
+                Track {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+              </button>
+            )}
+          </div>
+        </div>
       </div>
-      <div className="text-sm text-stone-600 mb-3">
-        {order.items.slice(0, 2).map(i => `${i.menuItem.name} × ${i.quantity}`).join(', ')}
-        {order.items.length > 2 && ` +${order.items.length - 2} more`}
-      </div>
-      <div className="flex items-center justify-between border-t border-stone-50 pt-3">
-        <span className="text-xs text-stone-500">{order.paymentMethod === 'QR_UPI' ? 'UPI' : 'Cash on delivery'} · {order.paymentMethod === 'CASH_ON_DELIVERY' ? 'Cash on delivery' : 'Prepaid'}</span>
-        <span className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
-      </div>
+      {expanded && isActive && (
+        <div className="border-t border-stone-100 p-4 bg-stone-50/50">
+          <LiveOrderTracker orderId={order.id} />
+        </div>
+      )}
     </div>
   )
 }

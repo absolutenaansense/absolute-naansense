@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { MapPin, CreditCard, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, ChevronRight, CheckCircle2, Clock } from 'lucide-react'
+import { MapPin, Truck, UtensilsCrossed, Banknote, Check, Plus, ChevronRight, CheckCircle2, Clock, AlertCircle, RefreshCw, XCircle, ChefHat, PackageCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
+import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
@@ -44,6 +45,8 @@ export default function CheckoutPage() {
   const [notifying, setNotifying] = useState(false)
   const [paidTotal, setPaidTotal] = useState(0)
   const [orderComplete, setOrderComplete] = useState(false)
+  const [paymentState, setPaymentState] = useState('idle') // idle | attempted | paid | failed
+  const [liveStatus, setLiveStatus] = useState(null)
 
   const navigate = useNavigate()
   const { user } = useAuthStore()
@@ -107,9 +110,10 @@ export default function CheckoutPage() {
     setNotifying(true)
     try {
       await ordersApi.paymentReceived(placedOrder.id)
-      toast.success('Restaurant notified! Confirming your order…')
+      setPaymentState('paid')
+      toast.success('Payment confirmed! Restaurant is reviewing your order.')
     } catch {
-      toast.error('Failed to notify restaurant')
+      toast.error('Failed to confirm — please try again')
     } finally {
       setNotifying(false)
     }
@@ -386,52 +390,143 @@ export default function CheckoutPage() {
 
       {/* Step 2: Confirmation */}
       {step === 2 && (
-        <div className="px-4 py-6 space-y-4">
-          <div className="card p-6 text-center">
-            {paymentMethod === 'QR_UPI' ? (
-              <>
-                <Clock size={40} className="text-amber-500 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-stone-900 mb-1">Order placed! Now pay to confirm.</h3>
-                <p className="text-sm text-stone-500 mb-4">
-                  Scan the QR below and pay ₹{paidTotal.toFixed(0)} — then tap "I've paid" so we can confirm your order.
-                </p>
-                {/* UPI buttons on confirmation screen */}
-                <div className="grid grid-cols-2 gap-2 w-full mb-4">
-                  {[
-                    { name: 'Google Pay', scheme: 'gpay', color: 'border-blue-100' },
-                    { name: 'PhonePe', scheme: 'phonepe', color: 'border-purple-100' },
-                    { name: 'Paytm', scheme: 'paytmmp', color: 'border-sky-100' },
-                    { name: 'BHIM / UPI', scheme: 'upi', color: 'border-orange-100' },
-                  ].map(app => (
-                    <a key={app.scheme}
-                      href={`${app.scheme}://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${paidTotal.toFixed(2)}&cu=INR&tn=Order+at+Absolute+Naansense`}
-                      className={`flex items-center justify-center text-xs font-semibold text-stone-700 border-2 ${app.color} bg-white rounded-xl py-2.5 transition-all active:scale-95`}
-                    >{app.name}</a>
-                  ))}
-                </div>
-                <div className="text-xs font-mono text-stone-400 mb-3">8299018895@okbizaxis · ₹{paidTotal.toFixed(0)}</div>
-                <button onClick={handleIvePaid} disabled={notifying} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
-                  {notifying ? 'Notifying restaurant…' : "✓ I've paid — notify restaurant"}
-                </button>
-              </>
-            ) : (
-              <>
-                <CheckCircle2 size={40} className="text-green-500 mx-auto mb-3" />
-                <h3 className="text-lg font-semibold text-stone-900 mb-1">Order confirmed!</h3>
-                <p className="text-sm text-stone-500">Your order is being prepared. Pay ₹{paidTotal.toFixed(0)} on delivery.</p>
-              </>
-            )}
+        <div className="px-4 py-4 space-y-3">
 
-            <div className="mt-5 bg-stone-50 rounded-xl p-4 text-left">
-              <div className="text-xs text-stone-400 mb-2">Order reference</div>
-              <div className="font-mono font-semibold text-stone-800">{placedOrder.id?.substring(0,8).toUpperCase()}</div>
+          {/* Order reference */}
+          <div className="card p-4 flex items-center justify-between">
+            <div>
+              <div className="text-xs text-stone-400">Order reference</div>
+              <div className="font-mono font-semibold text-stone-800 text-sm">#{placedOrder?.id?.substring(0,8).toUpperCase()}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs text-stone-400">Amount</div>
+              <div className="font-bold text-brand-600">₹{paidTotal.toFixed(0)}</div>
             </div>
           </div>
 
+          {/* COD flow */}
+          {paymentMethod === 'CASH_ON_DELIVERY' && (
+            <div className="card p-5 text-center">
+              <CheckCircle2 size={44} className="text-green-500 mx-auto mb-3" />
+              <h3 className="text-base font-semibold text-stone-900 mb-1">Order placed!</h3>
+              <p className="text-sm text-stone-500">Pay ₹{paidTotal.toFixed(0)} cash when your order arrives.</p>
+              <div className="mt-4 bg-amber-50 rounded-xl p-3 text-xs text-amber-700">
+                Waiting for restaurant to confirm your order…
+              </div>
+            </div>
+          )}
+
+          {/* UPI flow */}
+          {paymentMethod === 'QR_UPI' && (
+            <>
+              {/* STEP A: Payment pending */}
+              {paymentState !== 'paid' && (
+                <div className="card p-5">
+                  {paymentState === 'failed' ? (
+                    <div className="text-center mb-4">
+                      <XCircle size={40} className="text-red-500 mx-auto mb-2" />
+                      <h3 className="font-semibold text-stone-900">Payment failed or cancelled</h3>
+                      <p className="text-xs text-stone-500 mt-1">Please try again or cancel your order</p>
+                    </div>
+                  ) : (
+                    <div className="text-center mb-4">
+                      <Clock size={40} className="text-amber-500 mx-auto mb-2" />
+                      <h3 className="font-semibold text-stone-900">Complete your payment</h3>
+                      <p className="text-xs text-stone-500 mt-1">Tap a button to open your UPI app with amount pre-filled</p>
+                    </div>
+                  )}
+
+                  {/* UPI app buttons */}
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {[
+                      { name: 'Google Pay', scheme: 'gpay', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                      { name: 'PhonePe', scheme: 'phonepe', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+                      { name: 'Paytm', scheme: 'paytmmp', bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
+                      { name: 'BHIM / UPI', scheme: 'upi', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+                    ].map(app => (
+                      <a
+                        key={app.scheme}
+                        href={`${app.scheme}://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${paidTotal.toFixed(2)}&cu=INR&tn=Order+%23${placedOrder?.id?.substring(0,8).toUpperCase()}`}
+                        onClick={() => setPaymentState('attempted')}
+                        className={`flex items-center justify-center gap-1.5 text-xs font-semibold ${app.bg} ${app.text} border ${app.border} rounded-xl py-3 transition-all active:scale-95`}
+                      >{app.name}</a>
+                    ))}
+                  </div>
+
+                  {/* Manual UPI ID */}
+                  <div className="bg-stone-50 rounded-xl p-2.5 flex items-center justify-between mb-3">
+                    <span className="text-xs font-mono text-stone-600">8299018895@okbizaxis</span>
+                    <button
+                      onClick={() => { navigator.clipboard?.writeText('8299018895@okbizaxis'); toast.success('Copied!'); }}
+                      className="text-xs text-brand-500 font-medium"
+                    >Copy ID</button>
+                  </div>
+
+                  {/* After paying - confirm or report failure */}
+                  {paymentState === 'attempted' && (
+                    <div className="border-t border-stone-100 pt-3 space-y-2">
+                      <p className="text-xs text-center text-stone-500">Did your payment go through?</p>
+                      <button
+                        onClick={handleIvePaid}
+                        disabled={notifying}
+                        className="btn-primary w-full justify-center py-3 rounded-xl"
+                      >
+                        {notifying ? 'Confirming…' : '✓ Yes, payment successful'}
+                      </button>
+                      <button
+                        onClick={() => setPaymentState('failed')}
+                        className="w-full text-center text-xs text-red-500 py-2"
+                      >
+                        ✗ No, payment failed / cancelled
+                      </button>
+                    </div>
+                  )}
+
+                  {paymentState === 'failed' && (
+                    <div className="border-t border-stone-100 pt-3 space-y-2">
+                      <button
+                        onClick={() => setPaymentState('idle')}
+                        className="btn-primary w-full justify-center py-3 rounded-xl"
+                      >
+                        <RefreshCw size={15} /> Retry payment
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await ordersApi.cancelOrder(placedOrder.id)
+                            toast.success('Order cancelled')
+                            navigate('/')
+                          } catch { toast.error('Could not cancel — contact restaurant') }
+                        }}
+                        className="w-full text-center text-xs text-red-500 py-2"
+                      >
+                        Cancel this order
+                      </button>
+                    </div>
+                  )}
+
+                  {paymentState === 'idle' && (
+                    <p className="text-xs text-center text-amber-600 bg-amber-50 rounded-xl p-2">
+                      After paying, confirm below so we can prepare your order
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* STEP B: Payment confirmed — live order tracking */}
+              {paymentState === 'paid' && (
+                <div className="card p-5">
+                  <LiveOrderTracker orderId={placedOrder?.id} />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Navigate to orders */}
           <button onClick={() => navigate('/orders')} className="btn-secondary w-full justify-center">
-            View my orders
+            View all my orders
           </button>
-          <button onClick={() => navigate('/')} className="btn-ghost w-full justify-center text-stone-500">
+          <button onClick={() => navigate('/')} className="btn-ghost w-full justify-center text-stone-500 text-sm">
             Back to menu
           </button>
         </div>
