@@ -5,7 +5,8 @@ import CustomerLayout from '../../components/customer/CustomerLayout'
 import { format } from 'date-fns'
 import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../../services/supabase'
 
 const statusConfig = {
   pending: { label: 'Awaiting payment', icon: Clock, color: 'text-amber-600 bg-amber-50' },
@@ -18,10 +19,25 @@ const statusConfig = {
 }
 
 function OrderCard({ order }) {
-  const cfg = statusConfig[order.status] || statusConfig.pending
-  const Icon = cfg.icon
+  const [liveStatus, setLiveStatus] = useState(order.status)
   const [expanded, setExpanded] = useState(false)
-  const isActive = !['delivered', 'cancelled'].includes(order.status)
+
+  // Subscribe to real-time status updates for this order
+  useEffect(() => {
+    setLiveStatus(order.status) // sync when parent refreshes
+    const channel = supabase
+      .channel(`order-badge-${order.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'Order',
+        filter: `id=eq.${order.id}`,
+      }, (payload) => setLiveStatus(payload.new.status))
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [order.id, order.status])
+
+  const cfg = statusConfig[liveStatus] || statusConfig.pending
+  const Icon = cfg.icon
+  const isActive = !['delivered', 'cancelled'].includes(liveStatus)
 
   return (
     <div className="card mb-3 overflow-hidden">
