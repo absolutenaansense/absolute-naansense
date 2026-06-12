@@ -1,0 +1,184 @@
+// Prisma schema for Absolute Naansense
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  phone         String    @unique
+  email         String?   @unique
+  passwordHash  String
+  isVerified    Boolean   @default(false)
+  isReturning   Boolean   @default(false)   // unlocks COD after first order
+  fcmToken      String?                      // for push notifications
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  addresses     Address[]
+  orders        Order[]
+  otpTokens     OtpToken[]
+}
+
+model Address {
+  id        String   @id @default(uuid())
+  userId    String
+  label     String   // Home, Office, Other
+  line1     String
+  line2     String?
+  city      String
+  pincode   String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders Order[]
+}
+
+model OtpToken {
+  id        String   @id @default(uuid())
+  userId    String
+  otp       String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Category {
+  id       String     @id @default(uuid())
+  name     String     @unique
+  sortOrder Int       @default(0)
+  isActive Boolean    @default(true)
+
+  menuItems MenuItem[]
+}
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  categoryId  String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  isVeg       Boolean  @default(true)
+  isAvailable Boolean  @default(true)
+  imageUrl    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category   Category    @relation(fields: [categoryId], references: [id])
+  orderItems OrderItem[]
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  userId          String
+  addressId       String?
+  orderNumber     String      @unique  // human-readable: ABN-2026-0042
+  type            OrderType   @default(DELIVERY)
+  status          OrderStatus @default(PENDING_PAYMENT)
+  paymentMethod   PaymentMethod
+  paymentStatus   PaymentStatus @default(PENDING)
+  razorpayOrderId String?
+  razorpayPaymentId String?
+  subtotal        Decimal     @db.Decimal(10, 2)
+  deliveryFee     Decimal     @db.Decimal(10, 2) @default(40)
+  total           Decimal     @db.Decimal(10, 2)
+  notes           String?
+  petpoojaOrderId String?     // KOT reference from PetPooja
+  kotSentAt       DateTime?
+  confirmedAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  user      User        @relation(fields: [userId], references: [id])
+  address   Address?    @relation(fields: [addressId], references: [id])
+  items     OrderItem[]
+}
+
+model OrderItem {
+  id         String  @id @default(uuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  unitPrice  Decimal @db.Decimal(10, 2)
+  subtotal   Decimal @db.Decimal(10, 2)
+
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItem MenuItem @relation(fields: [menuItemId], references: [id])
+}
+
+model Reservation {
+  id         String            @id @default(uuid())
+  guestName  String
+  phone      String
+  guestCount Int
+  tableId    String?
+  date       DateTime
+  timeSlot   String            // "7:00 PM"
+  status     ReservationStatus @default(CONFIRMED)
+  notes      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  table Table? @relation(fields: [tableId], references: [id])
+}
+
+model Table {
+  id       String @id @default(uuid())
+  name     String @unique  // "Table 1", "Private Dining"
+  capacity Int
+  isActive Boolean @default(true)
+
+  reservations Reservation[]
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  fcmToken     String?
+  createdAt    DateTime @default(now())
+}
+
+enum OrderType {
+  DELIVERY
+  DINE_IN
+}
+
+enum OrderStatus {
+  PENDING_PAYMENT      // waiting for QR payment + admin confirm
+  PAYMENT_RECEIVED     // user says paid, waiting admin confirm
+  CONFIRMED            // admin confirmed, KOT sent
+  PREPARING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  QR_UPI
+  CASH_ON_DELIVERY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum ReservationStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
