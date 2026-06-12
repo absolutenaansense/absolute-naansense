@@ -43,6 +43,7 @@ export default function CheckoutPage() {
   const [confirming, setConfirming] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [paidTotal, setPaidTotal] = useState(0)
+  const [orderComplete, setOrderComplete] = useState(false)
 
   const navigate = useNavigate()
   const { user } = useAuthStore()
@@ -91,9 +92,10 @@ export default function CheckoutPage() {
       })
       setPlacedOrder(data)
       setPaidTotal(total)
+      setOrderComplete(true)
       setStep(2)
       clearCart()
-      setTimeout(() => clearCart(), 100) // delay to avoid nav race
+      clearCart()
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to place order')
     } finally {
@@ -113,7 +115,7 @@ export default function CheckoutPage() {
     }
   }
 
-  if (Object.keys(items).length === 0 && step < 2) {
+  if (Object.keys(items).length === 0 && !orderComplete) {
     navigate('/')
     return null
   }
