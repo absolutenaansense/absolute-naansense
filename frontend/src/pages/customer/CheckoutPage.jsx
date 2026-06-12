@@ -6,7 +6,7 @@ import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
-import { authApi, ordersApi } from '../../services/api'
+import { addressApi, ordersApi } from '../../services/api'
 
 const DELIVERY_FEE = 40
 
@@ -51,12 +51,11 @@ export default function CheckoutPage() {
   const deliveryFee = orderType === 'DELIVERY' ? DELIVERY_FEE : 0
   const total = subtotal + deliveryFee
 
-  const { data: profileData, refetch: refetchProfile } = useQuery({
-    queryKey: ['profile'],
-    queryFn: () => authApi.me().then(r => r.data),
+  const { data: addresses = [], refetch: refetchProfile } = useQuery({
+    queryKey: ['addresses', user?.id],
+    queryFn: () => addressApi.getAddresses(user?.id).then(r => r.data),
+    enabled: !!user?.id,
   })
-
-  const addresses = profileData?.user?.addresses || []
 
   const handleSaveAddress = async () => {
     if (!newAddress.line1 || !newAddress.city || !newAddress.pincode) {
@@ -64,7 +63,7 @@ export default function CheckoutPage() {
       return
     }
     try {
-      await authApi.addAddress({ ...newAddress, isDefault: addresses.length === 0 })
+      await addressApi.addAddress({ userId: user.id, ...newAddress })
       await refetchProfile()
       setShowAddAddress(false)
       toast.success('Address saved')
