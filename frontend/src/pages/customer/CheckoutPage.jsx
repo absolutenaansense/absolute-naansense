@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { MapPin, Truck, UtensilsCrossed, Banknote, Check, Plus, ChevronRight, CheckCircle2, Clock, AlertCircle, RefreshCw, XCircle, ChefHat, PackageCheck } from 'lucide-react'
+import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
