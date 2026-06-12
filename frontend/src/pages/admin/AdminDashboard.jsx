@@ -3,7 +3,7 @@ import { ShoppingBag, IndianRupee, Users, Clock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ordersApi } from '../../services/api'
-import { format } from 'date-fns'
+import { formatIST, isTodayIST } from '../../utils/dateIST'
 
 const statusColors = {
   pending: 'bg-stone-100 text-stone-600',
@@ -37,7 +37,7 @@ export default function AdminDashboard() {
   })
 
   const today = new Date().toDateString()
-  const todayOrders = orders.filter(o => new Date(o.createdAt).toDateString() === today)
+  const todayOrders = orders.filter(o => isTodayIST(o.createdAt))
   const todayRevenue = todayOrders.filter(o => o.paymentStatus === 'paid').reduce((s, o) => s + parseFloat(o.total), 0)
   const pendingConfirm = orders.filter(o => o.status === 'payment_received').length
   const totalCustomers = new Set(orders.map(o => o.userId)).size
@@ -72,7 +72,7 @@ export default function AdminDashboard() {
               <div>
                 <div className="text-sm font-medium text-stone-800">#{order.id?.substring(0,8).toUpperCase()}</div>
                 <div className="text-xs text-stone-400">
-                  {order.user?.name} · {format(new Date(order.createdAt), 'h:mm a')}
+                  {order.user?.name} · {formatIST(order.createdAt, 'h:mm a IST')}
                 </div>
               </div>
               <div className="flex items-center gap-2">

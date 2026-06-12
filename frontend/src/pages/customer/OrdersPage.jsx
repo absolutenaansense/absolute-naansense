@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ordersApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import CustomerLayout from '../../components/customer/CustomerLayout'
-import { format } from 'date-fns'
+import { formatIST } from '../../utils/dateIST'
 import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import { useState, useEffect } from 'react'
@@ -45,7 +45,7 @@ function OrderCard({ order }) {
         <div className="flex items-start justify-between mb-3">
           <div>
             <div className="font-mono text-sm font-semibold text-stone-700">#{order.id?.substring(0,8).toUpperCase()}</div>
-            <div className="text-xs text-stone-400 mt-0.5">{format(new Date(order.createdAt), 'dd MMM yyyy · h:mm a')}</div>
+            <div className="text-xs text-stone-400 mt-0.5">{formatIST(order.createdAt, 'dd MMM yyyy · h:mm a')}</div>
           </div>
           <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.color}`}>
             <Icon size={12} /> {cfg.label}

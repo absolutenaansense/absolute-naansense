@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, X, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { format } from 'date-fns'
+import { formatIST } from '../../utils/dateIST'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ordersApi } from '../../services/api'
 
@@ -98,7 +98,7 @@ function OrderCard({ order, refetch }) {
             )}
           </div>
           <div className="text-xs text-stone-400">
-            {order.user?.name} · {order.user?.phone} · {format(new Date(order.createdAt), 'dd MMM, h:mm a')}
+            {order.user?.name} · {order.user?.phone} · {formatIST(order.createdAt, 'dd MMM, h:mm a IST')}
           </div>
         </div>
         <div className="flex items-center gap-3">

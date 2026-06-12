@@ -12,7 +12,7 @@ export default function AdminReservations() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ guestName: '', phone: '', guestCount: 2, tableId: '', timeSlot: '8:00 PM', notes: '', date: format(new Date(), 'yyyy-MM-dd') })
+  const [form, setForm] = useState({ guestName: '', phone: '', guestCount: 2, tableId: '', timeSlot: '8:00 PM', notes: '', date: new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'}) })
   const queryClient = useQueryClient()
 
   const { data: reservationsData } = useQuery({
