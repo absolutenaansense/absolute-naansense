@@ -42,6 +42,7 @@ export default function CheckoutPage() {
   const [placedOrder, setPlacedOrder] = useState(null)
   const [confirming, setConfirming] = useState(false)
   const [notifying, setNotifying] = useState(false)
+  const [paidTotal, setPaidTotal] = useState(0)
 
   const navigate = useNavigate()
   const { user } = useAuthStore()
@@ -89,6 +90,7 @@ export default function CheckoutPage() {
         notes: '',
       })
       setPlacedOrder(data)
+      setPaidTotal(total)
       setStep(2)
       clearCart()
     } catch (err) {
@@ -361,7 +363,7 @@ export default function CheckoutPage() {
       )}
 
       {/* Step 2: Confirmation */}
-      {step === 2 && placedOrder && (
+      {step === 2 && (
         <div className="px-4 py-6 space-y-4">
           <div className="card p-6 text-center">
             {paymentMethod === 'QR_UPI' ? (
@@ -369,7 +371,7 @@ export default function CheckoutPage() {
                 <Clock size={40} className="text-amber-500 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-stone-900 mb-1">Order placed! Now pay to confirm.</h3>
                 <p className="text-sm text-stone-500 mb-4">
-                  Scan the QR below and pay ₹{total.toFixed(0)} — then tap "I've paid" so we can confirm your order.
+                  Scan the QR below and pay ₹{paidTotal.toFixed(0)} — then tap "I've paid" so we can confirm your order.
                 </p>
                 {/* QR on confirmation screen */}
                 <img
@@ -377,7 +379,7 @@ export default function CheckoutPage() {
                   alt="Scan to pay"
                   className="w-48 h-48 object-contain rounded-xl border border-stone-100 mx-auto mb-3"
                 />
-                <div className="text-xs font-mono text-stone-500 mb-4">8299018895@okbizaxis · ₹{total.toFixed(0)}</div>
+                <div className="text-xs font-mono text-stone-500 mb-4">8299018895@okbizaxis · ₹{paidTotal.toFixed(0)}</div>
                 <button onClick={handleIvePaid} disabled={notifying} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
                   {notifying ? 'Notifying restaurant…' : "✓ I've paid — notify restaurant"}
                 </button>
@@ -386,7 +388,7 @@ export default function CheckoutPage() {
               <>
                 <CheckCircle2 size={40} className="text-green-500 mx-auto mb-3" />
                 <h3 className="text-lg font-semibold text-stone-900 mb-1">Order confirmed!</h3>
-                <p className="text-sm text-stone-500">Your order is being prepared. Pay ₹{total.toFixed(0)} on delivery.</p>
+                <p className="text-sm text-stone-500">Your order is being prepared. Pay ₹{paidTotal.toFixed(0)} on delivery.</p>
               </>
             )}
 

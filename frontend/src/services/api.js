@@ -133,6 +133,17 @@ export const menuApi = {
 
 // --- Orders ---
 export const ordersApi = {
+  paymentReceived: async (orderId) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ status: 'payment_received', paymentStatus: 'paid', updatedAt: new Date().toISOString() })
+      .eq('id', orderId)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
   createOrder: async ({ userId, items, paymentMethod, total, notes, tableId }) => {
     // Create order
     const { data: order, error: orderError } = await supabase
