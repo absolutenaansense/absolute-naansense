@@ -66,13 +66,16 @@ export const authApi = {
 // --- Menu ---
 export const menuApi = {
   getMenu: async () => {
-    const { data, error } = await supabase
-      .from('MenuItem')
-      .select('*, category:Category(id, name, sortOrder)')
-      .eq('isAvailable', true)
-      .order('name')
-    if (error) throw { response: { data: { error: error.message } } }
-    return { data }
+    const { data: categories, error: catError } = await supabase
+      .from('Category')
+      .select('id, name, sortOrder, menuItems:MenuItem(id, name, description, price, isVeg, isAvailable)')
+      .eq('isActive', true)
+      .order('sortOrder')
+    if (catError) throw { response: { data: { error: catError.message } } }
+    const filtered = categories
+      .map(cat => ({ ...cat, menuItems: (cat.menuItems || []).filter(i => i.isAvailable) }))
+      .filter(cat => cat.menuItems.length > 0)
+    return { data: { categories: filtered } }
   },
 
   getAllItems: async () => {
