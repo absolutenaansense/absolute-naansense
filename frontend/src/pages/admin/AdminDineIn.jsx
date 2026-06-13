@@ -53,6 +53,7 @@ export default function AdminDineIn() {
   const [complimentary, setComplimentary] = useState(false)
   const [payMode, setPayMode] = useState('cash')  // cash | upi | split
   const [cashAmt, setCashAmt] = useState('')
+  const [openItem, setOpenItem] = useState({ show: false, name: '', price: '' })
   const [busy, setBusy] = useState(false)
 
   const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
@@ -86,14 +87,26 @@ export default function AdminDineIn() {
   }
   const close = () => { setCtx(null); setPending({}); setSettleOpen(false) }
 
-  const addPending = (item) => setPending(p => ({ ...p, [item.id]: { item, quantity: (p[item.id]?.quantity || 0) + 1, note: p[item.id]?.note || '' } }))
+  const addPending = (item, category) => setPending(p => ({ ...p, [item.id]: { item, category: category ?? p[item.id]?.category ?? null, quantity: (p[item.id]?.quantity || 0) + 1, note: p[item.id]?.note || '' } }))
+  const addOpenItem = (name, price) => {
+    const id = `open-${Date.now()}`
+    setPending(p => ({ ...p, [id]: { item: { id, name, price: parseFloat(price), isOpen: true }, category: 'Open', quantity: 1, note: '' } }))
+  }
   const decPending = (id) => setPending(p => { const c = p[id]; if (!c) return p; if (c.quantity <= 1) { const n = { ...p }; delete n[id]; return n } return { ...p, [id]: { ...c, quantity: c.quantity - 1 } } })
   const setNote = (id, note) => setPending(p => p[id] ? { ...p, [id]: { ...p[id], note } } : p)
 
-  const pendingItems = () => pendingArr.map(p => ({ menuItemId: p.item.id, quantity: p.quantity, price: parseFloat(p.item.price), name: p.item.name, note: p.note?.trim() || null }))
+  const pendingItems = () => pendingArr.map(p => ({
+    menuItemId: p.item.isOpen ? null : p.item.id,
+    itemName: p.item.isOpen ? p.item.name : null,
+    quantity: p.quantity, price: parseFloat(p.item.price), name: p.item.name,
+    note: p.note?.trim() || null, category: p.category || null,
+  }))
   const printRoundKot = (orderId, items, type, label) => printTicket({
     id: orderId, createdAt: new Date().toISOString(), orderType: type, tableLabel: label || null, customerName: custName || null,
-    items: items.map(i => ({ menuItemId: i.menuItemId, quantity: i.quantity, price: i.price, specialRequest: i.note, menuItem: { name: i.name } })),
+    items: items.map(i => ({
+      menuItemId: i.menuItemId, quantity: i.quantity, price: i.price, specialRequest: i.note, itemName: i.itemName, category: i.category,
+      menuItem: i.menuItemId ? { name: i.name, category: { name: i.category } } : null,
+    })),
   }, { title: 'KOT', showPrices: false })
 
   const sendKot = async () => {
@@ -160,7 +173,7 @@ export default function AdminDineIn() {
   }
 
   // Check Items: edit a running order's committed items.
-  const openEdit = () => setEditDraft(committed.map(it => ({ id: it.id, name: it.menuItem?.name || '', quantity: it.quantity, price: it.price })))
+  const openEdit = () => setEditDraft(committed.map(it => ({ id: it.id, name: it.menuItem?.name || it.itemName || '', quantity: it.quantity, price: it.price })))
   const editQty = (id, d) => setEditDraft(arr => arr.map(r => r.id === id ? { ...r, quantity: Math.max(1, r.quantity + d) } : r))
   const editRemove = (id) => setEditDraft(arr => arr.filter(r => r.id !== id))
   const saveEdit = async () => {
@@ -224,13 +237,13 @@ export default function AdminDineIn() {
       {FLOOR_SECTIONS.map(section => (
         <div key={section.name} className="mb-6">
           <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">{section.name}</div>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+          <div className="flex flex-wrap gap-3">
             {section.tables.map(t => {
               const ord = ordersByTable[t.label]
               const st = stateOf(ord)
               return (
                 <button key={t.label} onClick={() => open({ type: 'DINE_IN', label: t.label })}
-                  className={`relative rounded-xl border-2 p-3 text-left transition-all active:scale-95 ${TILE[st]}`}>
+                  className={`relative w-24 h-24 rounded-2xl border-2 p-3 text-left transition-all active:scale-95 flex flex-col ${TILE[st]}`}>
                   {ord?.isHeld && <span className="absolute top-1.5 right-1.5 text-[9px] bg-stone-800 text-white px-1 rounded">HOLD</span>}
                   <div className="font-semibold text-stone-800">{t.label}</div>
                   {ord ? (
@@ -362,7 +375,7 @@ export default function AdminDineIn() {
                     <div className="space-y-1.5">
                       {committed.map(it => (
                         <div key={it.id} className="text-sm">
-                          <div className="flex justify-between"><span className="text-stone-700">{it.menuItem?.name} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
+                          <div className="flex justify-between"><span className="text-stone-700">{(it.menuItem?.name || it.itemName)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
                           {it.specialRequest && <div className="text-xs text-amber-600 italic pl-1">↳ {it.specialRequest}</div>}
                         </div>
                       ))}
@@ -399,16 +412,28 @@ export default function AdminDineIn() {
                 {/* Menu picker (hidden in paid state) */}
                 {state !== 'paid' && (
                   <div className="card p-4">
-                    <div className="relative mb-3">
-                      <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu…" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2" />
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="relative flex-1">
+                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu…" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2" />
+                      </div>
+                      <button onClick={() => setOpenItem(o => ({ ...o, show: !o.show }))} className="text-xs font-medium px-3 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 whitespace-nowrap">+ Open Item</button>
                     </div>
+                    {openItem.show && (
+                      <div className="flex items-center gap-2 mb-3 p-2 bg-stone-50 rounded-lg">
+                        <input value={openItem.name} onChange={e => setOpenItem(o => ({ ...o, name: e.target.value }))} placeholder="Item name" className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-1.5" />
+                        <input value={openItem.price} onChange={e => setOpenItem(o => ({ ...o, price: e.target.value }))} type="number" placeholder="₹" className="w-20 text-sm bg-white border border-stone-200 rounded-lg px-3 py-1.5" />
+                        <button
+                          onClick={() => { if (openItem.name && openItem.price) { addOpenItem(openItem.name.trim(), openItem.price); setOpenItem({ show: false, name: '', price: '' }) } }}
+                          className="btn-primary py-1.5 px-3 rounded-lg text-sm">Add</button>
+                      </div>
+                    )}
                     <div className="space-y-3 max-h-72 overflow-y-auto">
                       {filteredMenu.map(cat => (
                         <div key={cat.id}>
                           <div className="text-[11px] font-semibold text-stone-400 uppercase mb-1">{cat.name}</div>
                           {cat.menuItems.map(item => (
-                            <button key={item.id} onClick={() => addPending(item)} className="w-full flex items-center justify-between py-2 border-b border-stone-50 hover:bg-stone-50 rounded px-1 text-left">
+                            <button key={item.id} onClick={() => addPending(item, cat.name)} className="w-full flex items-center justify-between py-2 border-b border-stone-50 hover:bg-stone-50 rounded px-1 text-left">
                               <span className="text-sm text-stone-700">{item.name}</span>
                               <span className="flex items-center gap-2 text-sm text-stone-500">₹{parseFloat(item.price).toFixed(0)}<Plus size={14} className="text-brand-500" /></span>
                             </button>
@@ -516,7 +541,7 @@ function Bill({ items, t, label }) {
       <div className="text-sm font-semibold text-stone-800 mb-3">Bill — Table {label}</div>
       <div className="space-y-1.5">
         {items.map(it => (
-          <div key={it.id} className="flex justify-between text-sm"><span className="text-stone-700">{it.menuItem?.name} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
+          <div key={it.id} className="flex justify-between text-sm"><span className="text-stone-700">{(it.menuItem?.name || it.itemName)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
         ))}
       </div>
       <div className="border-t border-stone-100 mt-3 pt-3 space-y-1 text-sm">

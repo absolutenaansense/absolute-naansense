@@ -198,7 +198,7 @@ export const ordersApi = {
   allOrders: async () => {
     const { data, error } = await supabase
       .from('Order')
-      .select('*, items:OrderItem(*, menuItem:MenuItem(name)), user:User(name, phone)')
+      .select('*, items:OrderItem(*, menuItem:MenuItem(name, category:Category(name))), user:User(name, phone)')
       .order('createdAt', { ascending: false })
     if (error) throw { response: { data: { error: error.message } } }
     return { data }
@@ -367,7 +367,7 @@ export const addressApi = {
 // Order.userId is NOT NULL, so staff-created orders attach to a sentinel walk-in user.
 const GST_RATE = 0.05
 const WALKIN_PHONE = '0000000000'
-const POS_SELECT = '*, items:OrderItem(id, quantity, price, menuItemId, specialRequest, menuItem:MenuItem(name))'
+const POS_SELECT = '*, items:OrderItem(id, quantity, price, menuItemId, specialRequest, itemName, menuItem:MenuItem(name, category:Category(name)))'
 
 const totalsFor = (items) => {
   const subtotal = items.reduce((s, i) => s + parseFloat(i.price) * i.quantity, 0)
@@ -375,7 +375,8 @@ const totalsFor = (items) => {
   return { subtotal, gst, total: subtotal + gst }
 }
 const itemRows = (orderId, items) => items.map(i => ({
-  orderId, menuItemId: i.menuItemId, quantity: i.quantity, price: i.price, specialRequest: i.note || null,
+  orderId, menuItemId: i.menuItemId || null, quantity: i.quantity, price: i.price,
+  specialRequest: i.note || null, itemName: i.itemName || null,
 }))
 
 export const dineApi = {

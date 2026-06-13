@@ -37,3 +37,22 @@
     @apply inline-flex items-center gap-1 text-xs;
   }
 }
+
+/* Admin olive-green theme: recolor the brand palette to olive within the admin
+   dashboard only (customer side is unaffected since it has no .admin-theme). */
+.admin-theme { background-color: #F5F7EC !important; }
+.admin-theme .btn-primary { background-color: #7F8F42 !important; }
+.admin-theme .btn-primary:hover { background-color: #687634 !important; }
+.admin-theme .bg-brand-500 { background-color: #7F8F42 !important; }
+.admin-theme .hover\:bg-brand-600:hover { background-color: #687634 !important; }
+.admin-theme .bg-brand-50 { background-color: #E8ECD2 !important; }
+.admin-theme .hover\:bg-brand-50:hover { background-color: #E8ECD2 !important; }
+.admin-theme .text-brand-500 { color: #687634 !important; }
+.admin-theme .text-brand-600 { color: #515C29 !important; }
+.admin-theme .border-brand-200 { border-color: #D3DBAB !important; }
+.admin-theme .border-brand-300 { border-color: #B8C47E !important; }
+.admin-theme .border-brand-400 { border-color: #9DAC5A !important; }
+.admin-theme .border-brand-500 { border-color: #7F8F42 !important; }
+.admin-theme .hover\:border-brand-400:hover { border-color: #9DAC5A !important; }
+.admin-theme .focus\:ring-brand-500:focus { --tw-ring-color: #7F8F42 !important; }
+.admin-theme .focus\:border-brand-300:focus { border-color: #B8C47E !important; }

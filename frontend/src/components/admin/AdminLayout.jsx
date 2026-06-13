@@ -25,7 +25,7 @@ export default function AdminLayout({ children, title }) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50 flex">
+    <div className="admin-theme min-h-screen bg-stone-50 flex">
       {/* Sidebar */}
       <aside className="w-56 bg-white border-r border-stone-100 flex flex-col fixed h-full z-30">
         <div className="p-5 border-b border-stone-100">

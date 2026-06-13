@@ -2,6 +2,21 @@ import { formatIST } from './dateIST'
 import { getOrderMeta, itemNote } from './orderNotes'
 import { RESTAURANT, CGST_RATE, SGST_RATE } from '../config/restaurant'
 
+// KOT item ordering: Starters > Main Course > Accompaniments > Desserts >
+// Beverages > Mocktails. Ranked by the item's category name (keyword based —
+// tweak the keywords here if a category lands in the wrong group).
+function kotRank(it) {
+  const c = (it.menuItem?.category?.name || it.category || '').toLowerCase()
+  if (c.includes('mocktail')) return 5
+  if (c.includes('beverage') || c.includes('water') || c.includes('juice') || c.includes('lassi') || c.includes('shake') || c.includes('tea') || c.includes('coffee') || c.includes('soft drink')) return 4
+  if (c.includes('dessert') || c.includes('sweet') || c.includes('ice cream')) return 3
+  if (c.includes('rice') || c.includes('biryani') || c.includes('bread') || c.includes('roti') || c.includes('accompan') || c.includes('raita') || c.includes('papad')) return 2
+  if (c.includes('main course') || c.includes('sizzler') || c.includes('curry') || c.includes('gravy')) return 1
+  if (c.includes('starter') || c.includes('soup') || c.includes('tikka') || c.includes('kebab') || c.includes('appetiz')) return 0
+  return 6
+}
+const nameOf = (it) => it.menuItem?.name || it.itemName || ''
+
 const GST_RATE = 0.05
 
 // Prints a thermal-printer-friendly ticket for an order.
@@ -31,10 +46,11 @@ export function printTicket(order, opts = {}) {
   const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const ref = order.id?.substring(0, 8).toUpperCase()
 
-  const rows = items.map(it => {
+  const sortedItems = [...items].sort((a, b) => kotRank(a) - kotRank(b))
+  const rows = sortedItems.map(it => {
     const note = itemNote(order, it)
     return `<tr>
-      <td class="it">${esc(it.menuItem?.name || '')}${note ? `<div class="note">↳ ${esc(note)}</div>` : ''}</td>
+      <td class="it">${esc(nameOf(it))}${note ? `<div class="note">↳ ${esc(note)}</div>` : ''}</td>
       ${showPrices ? `<td class="pr">${(parseFloat(it.price) * it.quantity).toFixed(0)}</td>` : ''}
       <td class="qty">${it.quantity}</td>
     </tr>`
@@ -54,7 +70,7 @@ export function printTicket(order, opts = {}) {
     .row { display:flex; justify-content:space-between; }
     table { width:100%; border-collapse: collapse; }
     th, td { text-align:left; padding: 3px 0; vertical-align: top; }
-    th.qty, td.qty { text-align:right; width: 30px; }
+    th.qty, td.qty { text-align:right; width: 30px; font-weight: bold; }
     th.pr, td.pr { text-align:right; width: 48px; }
     td.it { font-weight: bold; }
     .note { font-weight: normal; font-style: italic; font-size: 11px; padding-left: 6px; }
@@ -133,7 +149,7 @@ export function printBill(order) {
 
   const rows = items.map((it, i) => `<tr>
     <td>${i + 1}</td>
-    <td class="it">${esc(it.menuItem?.name || '')}</td>
+    <td class="it">${esc(nameOf(it))}</td>
     <td class="n">${it.quantity}</td>
     <td class="n">${money(parseFloat(it.price))}</td>
     <td class="n">${money(parseFloat(it.price) * it.quantity)}</td>
