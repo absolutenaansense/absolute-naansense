@@ -5,6 +5,7 @@ import CustomerLayout from '../../components/customer/CustomerLayout'
 import { formatIST } from '../../utils/dateIST'
 import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
+import PayAheadQR from '../../components/customer/PayAheadQR'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 
@@ -68,8 +69,9 @@ function OrderCard({ order }) {
         </div>
       </div>
       {expanded && isActive && (
-        <div className="border-t border-stone-100 p-4 bg-stone-50/50">
+        <div className="border-t border-stone-100 p-4 bg-stone-50/50 space-y-3">
           <LiveOrderTracker orderId={order.id} />
+          {order.paymentStatus !== 'paid' && <PayAheadQR amount={order.total} />}
         </div>
       )}
     </div>

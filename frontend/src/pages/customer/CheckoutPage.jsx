@@ -5,6 +5,7 @@ import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, Minus, T
 import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
+import PayAheadQR from '../../components/customer/PayAheadQR'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
@@ -441,14 +442,17 @@ export default function CheckoutPage() {
 
           {/* COD flow */}
           {paymentMethod === 'CASH_ON_DELIVERY' && (
-            <div className="card p-5 text-center">
-              <CheckCircle2 size={44} className="text-green-500 mx-auto mb-3" />
-              <h3 className="text-base font-semibold text-stone-900 mb-1">Order placed!</h3>
-              <p className="text-sm text-stone-500">Pay ₹{paidTotal.toFixed(0)} cash when your order arrives.</p>
-              <div className="mt-4 bg-amber-50 rounded-xl p-3 text-xs text-amber-700">
-                Waiting for restaurant to confirm your order…
+            <>
+              <div className="card p-5 text-center">
+                <CheckCircle2 size={44} className="text-green-500 mx-auto mb-3" />
+                <h3 className="text-base font-semibold text-stone-900 mb-1">Order placed!</h3>
+                <p className="text-sm text-stone-500">Pay ₹{paidTotal.toFixed(0)} cash when your order arrives.</p>
+                <div className="mt-4 bg-amber-50 rounded-xl p-3 text-xs text-amber-700">
+                  Waiting for restaurant to confirm your order…
+                </div>
               </div>
-            </div>
+              <PayAheadQR amount={paidTotal} />
+            </>
           )}
 
           {/* UPI flow */}
