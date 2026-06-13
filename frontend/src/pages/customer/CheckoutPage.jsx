@@ -631,9 +631,9 @@ export default function CheckoutPage() {
                 <div className="mt-2 text-[11px] text-stone-400">Note: once placed, an order cannot be cancelled or refunded.</div>
               </div>
 
-              {/* Live status — auto-refreshes as the restaurant updates the order */}
+              {/* Live status — auto-refreshes every 3s as the restaurant updates the order */}
               <div className="card p-4">
-                <LiveOrderTracker orderId={placedOrder?.id} />
+                <LiveOrderTracker orderId={placedOrder?.id} pollMs={3000} />
               </div>
 
               {/* Prominent WhatsApp send */}
@@ -773,7 +773,7 @@ export default function CheckoutPage() {
               {/* STEP B: Payment confirmed — live order tracking */}
               {paymentState === 'paid' && (
                 <div className="card p-5">
-                  <LiveOrderTracker orderId={placedOrder?.id} />
+                  <LiveOrderTracker orderId={placedOrder?.id} pollMs={3000} />
                 </div>
               )}
             </>

@@ -13,21 +13,21 @@ const STEPS = [
 
 const STATUS_INDEX = Object.fromEntries(STEPS.map((s, i) => [s.status, i]))
 
-export default function LiveOrderTracker({ orderId }) {
+export default function LiveOrderTracker({ orderId, pollMs = 10000 }) {
   const [status, setStatus] = useState('payment_received')
   const [notes, setNotes] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Initial fetch + polling fallback (in case a realtime event is missed).
+  // Initial fetch + polling (also a fallback in case a realtime event is missed).
   useEffect(() => {
     if (!orderId) return
     let active = true
     const fetchStatus = () => supabase.from('Order').select('status, notes').eq('id', orderId).single()
       .then(({ data }) => { if (active && data) { setStatus(data.status); setNotes(data.notes); setLoading(false) } })
     fetchStatus()
-    const t = setInterval(fetchStatus, 10000)
+    const t = setInterval(fetchStatus, pollMs)
     return () => { active = false; clearInterval(t) }
-  }, [orderId])
+  }, [orderId, pollMs])
 
   // Real-time subscription
   useEffect(() => {
