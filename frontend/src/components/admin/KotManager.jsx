@@ -34,18 +34,16 @@ export default function KotManager() {
   })
 
   const kots = useMemo(() => {
-    const today = formatIST(new Date().toISOString(), 'yyyy-MM-dd')
     const list = []
     for (const o of orders) {
       if (o.status === 'cancelled') continue
-      if (formatIST(o.createdAt, 'yyyy-MM-dd') !== today) continue
       const byKot = {}
       for (const it of (o.items || [])) { if (it.kotNo != null) (byKot[it.kotNo] ||= []).push(it) }
       for (const [k, items] of Object.entries(byKot)) {
         list.push({ kotNo: Number(k), order: o, items, used: !!o.billPrinted || o.paymentStatus === 'paid' })
       }
     }
-    return list.sort((a, b) => b.kotNo - a.kotNo)
+    return list.sort((a, b) => new Date(b.order.createdAt) - new Date(a.order.createdAt) || b.kotNo - a.kotNo)
   }, [orders])
 
   const where = (o) => o.orderType === 'DINE_IN' ? `Table ${o.tableLabel}` : o.orderType === 'TAKEAWAY' ? 'Take Away' : 'Delivery'
@@ -90,7 +88,7 @@ export default function KotManager() {
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 p-4 pt-16" onClick={() => setOpen(false)}>
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
-          <div className="flex items-center gap-2"><Search size={16} className="text-stone-400" /><span className="font-semibold text-stone-900">KOTs today ({kots.length})</span></div>
+          <div className="flex items-center gap-2"><Search size={16} className="text-stone-400" /><span className="font-semibold text-stone-900">All KOTs ({kots.length})</span></div>
           <button onClick={() => setOpen(false)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
         </div>
         <div className="flex items-center gap-4 px-5 py-2 text-[11px] text-stone-400 border-b border-stone-100">
@@ -104,7 +102,7 @@ export default function KotManager() {
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
                   <div className="font-semibold text-stone-800 text-sm">KOT {kot.kotNo} <span className="font-normal text-stone-400">· {where(kot.order)}</span></div>
-                  <div className="text-xs text-stone-400">{kot.items.reduce((s, i) => s + i.quantity, 0)} items · {formatIST(kot.order.createdAt, 'h:mm a')}{kot.used ? ' · Used in bill' : ''}</div>
+                  <div className="text-xs text-stone-400">{kot.items.reduce((s, i) => s + i.quantity, 0)} items · {formatIST(kot.order.createdAt, 'dd MMM, h:mm a')}{kot.used ? ' · Used in bill' : ''}</div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => setViewKot(v => v === kot.kotNo ? null : kot.kotNo)} title="View" className="w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50"><Eye size={15} /></button>

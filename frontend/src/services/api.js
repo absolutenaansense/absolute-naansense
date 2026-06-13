@@ -437,9 +437,9 @@ export const dineApi = {
     return { data: data || [] }
   },
 
-  // All orders from the last ~2 days with KOT-tagged items, for the KOT manager.
+  // All orders from the last ~30 days with KOT-tagged items, for the KOT manager.
   kotsRecent: async () => {
-    const since = new Date(Date.now() - 2 * 86400000).toISOString()
+    const since = new Date(Date.now() - 30 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('Order')
       .select('id, tableLabel, orderType, billPrinted, status, paymentStatus, createdAt, customerName, customerPhone, deliveryAddress, items:OrderItem(id, quantity, price, itemName, specialRequest, kotNo, menuItem:MenuItem(name, category:Category(name)))')
