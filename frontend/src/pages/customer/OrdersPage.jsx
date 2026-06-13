@@ -74,7 +74,7 @@ function OrderCard({ order }) {
           <div className="flex items-center gap-3">
             <span className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
             <button onClick={() => printBill(order)} className="text-stone-500 text-xs flex items-center gap-0.5 hover:text-stone-800">
-              <Receipt size={13} /> Bill
+              <Receipt size={13} /> Tax invoice
             </button>
             {isActive && (
               <button onClick={() => setExpanded(e => !e)} className="text-brand-500 text-xs flex items-center gap-0.5">

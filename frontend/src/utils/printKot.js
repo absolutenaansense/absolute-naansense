@@ -174,7 +174,7 @@ export function printBill(order) {
     <td class="n">${money(parseFloat(it.price) * it.quantity)}</td>
   </tr>`).join('')
 
-  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bill ${order.billNo ?? ''}</title>
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Tax invoice ${order.billNo ?? ''}</title>
   <style>
     @page { margin: 4mm; }
     * { box-sizing: border-box; }
@@ -188,12 +188,15 @@ export function printBill(order) {
     th.n, td.n { text-align:right; }
     td.it { word-break: break-word; }
     .grand { font-size: 19px; font-weight: bold; }
+    .doctitle { font-size: 16px; font-weight: bold; letter-spacing: 1px; margin: 4px 0; }
   </style></head><body>
     <div class="c name">${esc(RESTAURANT.name)}</div>
     <div class="c">${esc(RESTAURANT.address)}</div>
     <div class="c">GSTIN No - ${esc(RESTAURANT.gstin)}</div>
     <div class="c">FSSAI Lic No - ${esc(RESTAURANT.fssai)}</div>
     <div class="c">Mobile - ${esc(RESTAURANT.mobile)}</div>
+    <div class="hr"></div>
+    <div class="c doctitle">TAX INVOICE</div>
     <div class="hr"></div>
     <div>Name: ${esc(meta.name || '')}</div>
     ${meta.phone ? `<div>Phone: ${esc(meta.phone)}</div>` : ''}

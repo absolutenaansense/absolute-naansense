@@ -137,8 +137,8 @@ export default function AdminDineIn() {
   const printBill = async () => {
     if (!activeOrder) return
     setBusy(true)
-    try { const { data } = await dineApi.markBillPrinted(activeOrder.id); printBillTicket(data); toast.success('Bill printed'); await refetch() }
-    catch (e) { toast.error('Failed to print bill') } finally { setBusy(false) }
+    try { const { data } = await dineApi.markBillPrinted(activeOrder.id); printBillTicket(data); toast.success('Tax invoice printed'); await refetch() }
+    catch (e) { toast.error('Failed to print tax invoice') } finally { setBusy(false) }
   }
 
   const openSettle = () => { setDiscount(''); setComplimentary(false); setPayMode('cash'); setCashAmt(''); setSettleOpen(true) }
@@ -392,7 +392,7 @@ export default function AdminDineIn() {
                   <div className="card p-4 text-center space-y-3 max-w-sm">
                     <div className="text-green-600 font-semibold">Paid ₹{committedTotals.total.toFixed(0)}</div>
                     <div className="flex gap-2">
-                      <button onClick={() => printBillTicket(activeOrder)} className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Printer size={15} className="inline" /> Reprint bill</button>
+                      <button onClick={() => printBillTicket(activeOrder)} className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Printer size={15} className="inline" /> Reprint tax invoice</button>
                       <button disabled={busy} onClick={clearTable} className="flex-1 btn-primary justify-center py-2.5 rounded-xl">Clear table</button>
                     </div>
                   </div>
@@ -452,7 +452,7 @@ export default function AdminDineIn() {
                       {isDineIn && activeOrder && (
                         <div className="space-y-2">
                           <div className="grid grid-cols-2 gap-2">
-                            <button disabled={busy} onClick={printBill} className="px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-sm font-medium"><Receipt size={15} className="inline" /> Print bill</button>
+                            <button disabled={busy} onClick={printBill} className="px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-sm font-medium"><Receipt size={15} className="inline" /> Print tax invoice</button>
                             <button disabled={busy} onClick={openSettle} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
@@ -606,7 +606,7 @@ export default function AdminDineIn() {
 function Bill({ items, t, label }) {
   return (
     <div className="card p-4">
-      <div className="text-sm font-semibold text-stone-800 mb-3">Bill — Table {label}</div>
+      <div className="text-sm font-semibold text-stone-800 mb-3">Tax invoice — Table {label}</div>
       <div className="space-y-1.5">
         {items.map(it => (
           <div key={it.id} className="flex justify-between text-sm"><span className="text-stone-700">{(it.menuItem?.name || it.itemName)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>

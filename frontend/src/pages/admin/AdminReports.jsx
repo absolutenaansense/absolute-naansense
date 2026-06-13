@@ -36,7 +36,7 @@ export default function AdminReports() {
     if (!billNo) return
     try {
       const { data } = await reportsApi.byBillNo(Number(billNo))
-      if (!data) { toast.error(`No bill #${billNo}`); return }
+      if (!data) { toast.error(`No tax invoice #${billNo}`); return }
       printBill(data)
     } catch { toast.error('Lookup failed') }
   }
@@ -51,12 +51,12 @@ export default function AdminReports() {
       const removeIds = editOrder.items.map(i => i.id).filter(id => !keptIds.includes(id))
       const updates = draft.filter(x => { const o = editOrder.items.find(i => i.id === x.id); return o && o.quantity !== x.quantity }).map(x => ({ id: x.id, quantity: x.quantity }))
       await dineApi.updateOrderItems({ orderId: editOrder.id, updates, removeIds })
-      toast.success('Bill modified'); setEditOrder(null); await refetch()
+      toast.success('Tax invoice modified'); setEditOrder(null); await refetch()
     } catch { toast.error('Failed to modify') } finally { setBusy(false) }
   }
   const cancelBill = async (r) => {
-    if (!confirm(`Cancel bill ${r.billNo ?? ''}? This marks the order cancelled.`)) return
-    try { await ordersApi.cancelOrder(r.id); toast.success('Bill cancelled'); await refetch() }
+    if (!confirm(`Cancel tax invoice ${r.billNo ?? ''}? This marks the order cancelled.`)) return
+    try { await ordersApi.cancelOrder(r.id); toast.success('Tax invoice cancelled'); await refetch() }
     catch { toast.error('Failed to cancel') }
   }
 
@@ -129,9 +129,9 @@ export default function AdminReports() {
       {/* Bill lookup */}
       <div className="card p-3 mb-5 flex items-center gap-2">
         <Receipt size={16} className="text-stone-400" />
-        <span className="text-sm text-stone-500">View bill by number:</span>
+        <span className="text-sm text-stone-500">View tax invoice by number:</span>
         <input type="number" value={billNo} onChange={e => setBillNo(e.target.value)} onKeyDown={e => e.key === 'Enter' && viewBill()}
-          placeholder="Bill No." className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 w-32" />
+          placeholder="Invoice No." className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 w-32" />
         <button onClick={viewBill} className="btn-primary py-1.5 px-3 rounded-xl text-xs">View / Print</button>
       </div>
 
@@ -245,7 +245,7 @@ export default function AdminReports() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setViewOrder(null)}>
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
-              <span className="font-semibold text-stone-900">Bill #{viewOrder.billNo ?? '—'} · {typeLabel(viewOrder.meta)}</span>
+              <span className="font-semibold text-stone-900">Tax invoice #{viewOrder.billNo ?? '—'} · {typeLabel(viewOrder.meta)}</span>
               <button onClick={() => setViewOrder(null)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-1.5 text-sm max-h-[60vh] overflow-y-auto">
@@ -273,7 +273,7 @@ export default function AdminReports() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setEditOrder(null)}>
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
-              <span className="font-semibold text-stone-900">Modify bill #{editOrder.billNo ?? '—'}</span>
+              <span className="font-semibold text-stone-900">Modify tax invoice #{editOrder.billNo ?? '—'}</span>
               <button onClick={() => setEditOrder(null)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
             </div>
             <div className="p-5 space-y-2 max-h-[60vh] overflow-y-auto">

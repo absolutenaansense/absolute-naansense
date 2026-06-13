@@ -219,7 +219,7 @@ function OrderCard({ order, refetch, now }) {
                   onClick={() => printBill(order)}
                   className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm font-medium flex items-center gap-1.5"
                 >
-                  <Receipt size={15} /> Bill
+                  <Receipt size={15} /> Tax invoice
                 </button>
                 <button
                   onClick={() => sendKotWhatsApp(order)}
