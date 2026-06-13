@@ -9,7 +9,6 @@ import PayAheadQR from '../../components/customer/PayAheadQR'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
-import { buildOrderNotes } from '../../utils/orderNotes'
 
 const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
 const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
@@ -92,8 +91,6 @@ export default function CheckoutPage() {
     setConfirming(true)
     try {
       const orderItems = getOrderItems()
-      const itemNotes = {}
-      orderItems.forEach(oi => { if (oi.note) itemNotes[oi.menuItemId] = oi.note })
       const selectedAddress = addresses.find(a => a.id === selectedAddressId)
       const addressText = selectedAddress
         ? `${selectedAddress.line1}${selectedAddress.line2 ? ', ' + selectedAddress.line2 : ''}, ${selectedAddress.city} - ${selectedAddress.pincode}`
@@ -101,11 +98,10 @@ export default function CheckoutPage() {
       const { data } = await ordersApi.createOrder({
         userId: user.id,
         items: orderItems,
-        addressId: selectedAddressId,
-        type: orderType,
         paymentMethod,
         total,
-        notes: buildOrderNotes({ type: orderType, address: addressText, itemNotes }),
+        orderType,
+        deliveryAddress: addressText,
       })
       setPlacedOrder(data)
       setPaidTotal(total)

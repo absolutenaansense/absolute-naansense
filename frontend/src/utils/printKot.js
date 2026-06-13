@@ -1,5 +1,5 @@
 import { formatIST } from './dateIST'
-import { parseOrderNotes } from './orderNotes'
+import { getOrderMeta, itemNote } from './orderNotes'
 
 const GST_RATE = 0.05
 
@@ -16,9 +16,11 @@ const GST_RATE = 0.05
 export function printTicket(order, opts = {}) {
   const title = opts.title || 'KOT'
   const showPrices = opts.showPrices ?? (title === 'BILL')
-  const notes = parseOrderNotes(order.notes)
+  const meta = getOrderMeta(order)
   const items = opts.items || order.items || []
-  const isDineIn = (notes.type || '').toUpperCase() === 'DINE_IN'
+  const type = (meta.type || '').toUpperCase()
+  const isDineIn = type === 'DINE_IN'
+  const isTakeaway = type === 'TAKEAWAY'
 
   const subtotal = items.reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
   const gst = Math.round(subtotal * GST_RATE)
@@ -29,7 +31,7 @@ export function printTicket(order, opts = {}) {
   const ref = order.id?.substring(0, 8).toUpperCase()
 
   const rows = items.map(it => {
-    const note = notes.items?.[it.menuItemId] || ''
+    const note = itemNote(order, it)
     return `<tr>
       <td class="it">${esc(it.menuItem?.name || '')}${note ? `<div class="note">↳ ${esc(note)}</div>` : ''}</td>
       ${showPrices ? `<td class="pr">${(parseFloat(it.price) * it.quantity).toFixed(0)}</td>` : ''}
@@ -37,7 +39,7 @@ export function printTicket(order, opts = {}) {
     </tr>`
   }).join('')
 
-  const heading = isDineIn ? `Table ${esc(notes.table || '')}` : 'Delivery'
+  const heading = isDineIn ? `Table ${esc(meta.table || '')}` : (isTakeaway ? 'Take Away' : 'Delivery')
 
   const html = `<!doctype html><html><head><meta charset="utf-8"><title>${title} ${esc(ref)}</title>
   <style>
@@ -62,11 +64,10 @@ export function printTicket(order, opts = {}) {
     <div class="c big">${title} &mdash; ${esc(ref)}</div>
     <div class="c big">${esc(heading)}</div>
     <div class="hr"></div>
-    ${order.user?.name ? `<div>Customer: ${esc(order.user.name)}</div>` : ''}
-    ${notes.name ? `<div>Name: ${esc(notes.name)}</div>` : ''}
+    ${order.user?.name && order.user.phone !== '0000000000' ? `<div>Customer: ${esc(order.user.name)}</div>` : ''}
+    ${meta.name ? `<div>Name: ${esc(meta.name)}</div>` : ''}
     ${order.user?.phone && order.user.phone !== '0000000000' ? `<div>Phone: ${esc(order.user.phone)}</div>` : ''}
-    ${notes.phone ? `<div>Phone: ${esc(notes.phone)}</div>` : ''}
-    ${!isDineIn && notes.address ? `<div>Address: ${esc(notes.address)}</div>` : ''}
+    ${!isDineIn && !isTakeaway && meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
     <div class="hr"></div>
     <table>
       <thead><tr><th>Item</th>${showPrices ? '<th class="pr">Amt</th>' : ''}<th class="qty">Qty</th></tr></thead>
@@ -80,7 +81,7 @@ export function printTicket(order, opts = {}) {
       <div class="row big"><span>TOTAL</span><span>Rs ${total.toFixed(0)}</span></div>
       <div class="hr"></div>
       <div class="c">Payment: ${order.paymentMethod === 'QR_UPI' ? 'Prepaid / UPI' : 'Cash'}</div>
-    ` : `<div class="c">${isDineIn ? 'DINE-IN — Kitchen copy' : 'Kitchen copy'}</div>`}
+    ` : `<div class="c">${isDineIn ? 'DINE-IN — Kitchen copy' : (isTakeaway ? 'TAKE AWAY — Kitchen copy' : 'Kitchen copy')}</div>`}
   </body></html>`
 
   const iframe = document.createElement('iframe')

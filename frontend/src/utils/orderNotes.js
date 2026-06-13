@@ -13,6 +13,25 @@ export function buildOrderNotes({ type, address, itemNotes }) {
   return JSON.stringify({ type: type || null, address: address || null, items })
 }
 
+// Normalized order metadata, preferring real columns and falling back to the
+// legacy notes JSON for older rows. Use this everywhere instead of reading
+// columns or notes directly.
+export function getOrderMeta(order) {
+  const n = parseOrderNotes(order?.notes)
+  return {
+    type: order?.orderType || n.type || (order?.tableLabel || n.table ? 'DINE_IN' : 'DELIVERY'),
+    table: order?.tableLabel || n.table || null,
+    address: order?.deliveryAddress || n.address || null,
+    name: order?.customerName || n.name || null,
+    itemNotes: n.items || {},
+  }
+}
+
+// Per-item special request: prefer the OrderItem column, fall back to notes JSON.
+export function itemNote(order, item) {
+  return item?.specialRequest || getOrderMeta(order).itemNotes?.[item?.menuItemId] || ''
+}
+
 export function parseOrderNotes(notes) {
   if (!notes) return { type: null, address: null, items: {} }
   try {

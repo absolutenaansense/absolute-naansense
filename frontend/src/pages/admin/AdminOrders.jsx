@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
-import { parseOrderNotes } from '../../utils/orderNotes'
+import { getOrderMeta, itemNote } from '../../utils/orderNotes'
 import { printKot } from '../../utils/printKot'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ordersApi } from '../../services/api'
@@ -49,7 +49,7 @@ function OrderCard({ order, refetch }) {
   const [loading, setLoading] = useState(false)
   const nextStatus = STATUS_NEXT[order.status]
 
-  const notes = parseOrderNotes(order.notes)
+  const meta = getOrderMeta(order)
   const subtotal = (order.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
   const gst = Math.round(subtotal * 0.05)
   const delivery = Math.max(0, Math.round(parseFloat(order.total) - subtotal - gst))
@@ -123,7 +123,7 @@ function OrderCard({ order, refetch }) {
             <div className="text-xs font-semibold text-stone-400 uppercase mb-2">Items</div>
             <div className="space-y-1.5">
               {order.items?.map(item => {
-                const note = notes.items?.[item.menuItemId]
+                const note = itemNote(order, item)
                 return (
                   <div key={item.id} className="text-sm">
                     <div className="flex justify-between">
@@ -143,9 +143,9 @@ function OrderCard({ order, refetch }) {
             </div>
           </div>
 
-          {notes.address && (
+          {meta.address && (
             <div className="bg-stone-50 rounded-xl p-3 text-xs text-stone-600">
-              <span className="text-stone-400">Deliver to: </span>{notes.address}
+              <span className="text-stone-400">Deliver to: </span>{meta.address}
             </div>
           )}
 
@@ -218,8 +218,9 @@ export default function AdminOrders() {
     refetchInterval: 15000, // auto-refresh every 15 seconds
   })
 
-  // Dine-in orders are managed in the Dine-in page, not here.
-  const onlineOrders = orders.filter(o => parseOrderNotes(o.notes).type !== 'DINE_IN')
+  // POS floor/counter orders (tables + take-away) are managed in the Dine-in page.
+  // Customer "dine-in" (no tableLabel) still belongs here.
+  const onlineOrders = orders.filter(o => !o.tableLabel && getOrderMeta(o).type !== 'TAKEAWAY')
   const filtered = filter ? onlineOrders.filter(o => o.status === filter) : onlineOrders
   const pendingCount = onlineOrders.filter(o => o.status === 'payment_received').length
 
