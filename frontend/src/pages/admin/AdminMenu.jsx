@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, ToggleLeft, ToggleRight, Edit2, Check, X } from 'lucide-react'
+import { Plus, ToggleLeft, ToggleRight, Edit2, Check, X, Search } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { menuApi } from '../../services/api'
@@ -35,6 +35,7 @@ function EditItemModal({ item, onClose, onSave }) {
 
 export default function AdminMenu() {
   const [editingItem, setEditingItem] = useState(null)
+  const [search, setSearch] = useState('')
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
@@ -64,13 +65,25 @@ export default function AdminMenu() {
         />
       )}
 
-      <div className="flex justify-end mb-5">
-        <button className="btn-primary text-sm">
+      <div className="flex items-center gap-3 mb-5">
+        <div className="relative flex-1 max-w-md">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search menu items…"
+            className="w-full text-sm bg-white border border-stone-200 rounded-xl pl-9 pr-3 py-2"
+          />
+        </div>
+        <button className="btn-primary text-sm whitespace-nowrap">
           <Plus size={15} /> Add menu item
         </button>
       </div>
 
-      {data?.categories?.map(cat => (
+      {(data?.categories || [])
+        .map(cat => ({ ...cat, menuItems: cat.menuItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase())) }))
+        .filter(cat => cat.menuItems.length > 0)
+        .map(cat => (
         <div key={cat.id} className="card mb-4 overflow-hidden">
           <div className="px-5 py-3 bg-stone-50 border-b border-stone-100">
             <h3 className="text-sm font-semibold text-stone-700">{cat.name}</h3>
