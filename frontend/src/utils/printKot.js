@@ -1,5 +1,6 @@
 import { formatIST } from './dateIST'
 import { getOrderMeta, itemNote } from './orderNotes'
+import { RESTAURANT, CGST_RATE, SGST_RATE } from '../config/restaurant'
 
 const GST_RATE = 0.05
 
@@ -84,6 +85,11 @@ export function printTicket(order, opts = {}) {
     ` : `<div class="c">${isDineIn ? 'DINE-IN — Kitchen copy' : (isTakeaway ? 'TAKE AWAY — Kitchen copy' : 'Kitchen copy')}</div>`}
   </body></html>`
 
+  printHtml(html)
+}
+
+// Shared: render HTML in a hidden iframe and send to the printer.
+function printHtml(html) {
   const iframe = document.createElement('iframe')
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
   document.body.appendChild(iframe)
@@ -99,4 +105,76 @@ export function printTicket(order, opts = {}) {
 // Back-compat: delivery/online confirm prints a KOT with totals (existing behaviour).
 export function printKot(order, opts = {}) {
   return printTicket(order, { title: 'KOT', showPrices: true, ...opts })
+}
+
+// Full GST tax invoice (customer bill), matching the restaurant's printed format.
+export function printBill(order) {
+  const meta = getOrderMeta(order)
+  const items = order.items || []
+  const type = (meta.type || '').toUpperCase()
+  const heading = type === 'DINE_IN' ? `Dine In: ${meta.table || ''}` : (type === 'TAKEAWAY' ? 'Take Away' : 'Delivery')
+
+  const subtotal = items.reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
+  const cgst = subtotal * CGST_RATE
+  const sgst = subtotal * SGST_RATE
+  const grandRaw = subtotal + cgst + sgst
+  const grand = Math.round(grandRaw)
+  const roundOff = grand - grandRaw
+  const totalQty = items.reduce((s, it) => s + it.quantity, 0)
+
+  const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+  const money = (n) => n.toFixed(2)
+  const paid = order.paymentMethod === 'QR_UPI' ? 'Other [UPI]' : 'Cash'
+
+  const rows = items.map((it, i) => `<tr>
+    <td>${i + 1}</td>
+    <td class="it">${esc(it.menuItem?.name || '')}</td>
+    <td class="n">${it.quantity}</td>
+    <td class="n">${money(parseFloat(it.price))}</td>
+    <td class="n">${money(parseFloat(it.price) * it.quantity)}</td>
+  </tr>`).join('')
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Bill ${order.billNo ?? ''}</title>
+  <style>
+    @page { margin: 4mm; }
+    * { box-sizing: border-box; }
+    body { font-family: 'Courier New', monospace; color:#000; width: 76mm; margin:0 auto; font-size: 12px; }
+    .c { text-align:center; }
+    .name { font-size: 18px; font-weight: bold; }
+    .hr { border-top: 1px dashed #000; margin: 6px 0; }
+    .row { display:flex; justify-content:space-between; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { text-align:left; padding: 2px 0; vertical-align: top; }
+    th.n, td.n { text-align:right; }
+    td.it { word-break: break-word; }
+    .grand { font-size: 17px; font-weight: bold; }
+  </style></head><body>
+    <div class="c name">${esc(RESTAURANT.name)}</div>
+    <div class="c">${esc(RESTAURANT.address)}</div>
+    <div class="c">GSTIN No - ${esc(RESTAURANT.gstin)}</div>
+    <div class="c">FSSAI Lic No - ${esc(RESTAURANT.fssai)}</div>
+    <div class="c">Mobile - ${esc(RESTAURANT.mobile)}</div>
+    <div class="hr"></div>
+    <div>Name: ${esc(meta.name || '')}</div>
+    <div class="row"><span>Date: ${esc(formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm'))}</span><span>${esc(heading)}</span></div>
+    <div class="row"><span>Cashier: ${esc(RESTAURANT.cashier)}</span><span>Bill No.: ${order.billNo ?? '-'}</span></div>
+    <div class="hr"></div>
+    <table>
+      <thead><tr><th>No.</th><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Amount</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="hr"></div>
+    <div class="row"><span>Total Qty: ${totalQty}</span><span>Sub Total&nbsp;&nbsp;${money(subtotal)}</span></div>
+    <div class="row"><span></span><span>CGST 2.5%&nbsp;&nbsp;${money(cgst)}</span></div>
+    <div class="row"><span></span><span>SGST 2.5%&nbsp;&nbsp;${money(sgst)}</span></div>
+    <div class="row"><span></span><span>Round off&nbsp;&nbsp;${roundOff >= 0 ? '+' : ''}${money(roundOff)}</span></div>
+    <div class="hr"></div>
+    <div class="row grand"><span>Grand Total</span><span>₹ ${grand.toFixed(2)}</span></div>
+    <div class="hr"></div>
+    <div>Paid via ${esc(paid)}</div>
+    <div class="hr"></div>
+    <div class="c">${esc(RESTAURANT.footer)}</div>
+  </body></html>`
+
+  printHtml(html)
 }

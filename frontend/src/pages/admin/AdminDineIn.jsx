@@ -6,7 +6,7 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import { menuApi, dineApi } from '../../services/api'
 import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
-import { printTicket } from '../../utils/printKot'
+import { printTicket, printBill as printBillTicket } from '../../utils/printKot'
 import { FLOOR_SECTIONS, ALL_TABLES } from '../../config/floorLayout'
 
 const GST_RATE = 0.05
@@ -109,14 +109,14 @@ export default function AdminDineIn() {
   const printBill = async () => {
     if (!activeOrder) return
     setBusy(true)
-    try { await dineApi.markBillPrinted(activeOrder.id); printTicket(activeOrder, { title: 'BILL', showPrices: true }); toast.success('Bill printed'); await refetch() }
+    try { const { data } = await dineApi.markBillPrinted(activeOrder.id); printBillTicket(data); toast.success('Bill printed'); await refetch() }
     catch (e) { toast.error('Failed to print bill') } finally { setBusy(false) }
   }
 
   const settle = async (paymentMethod) => {
     if (!activeOrder) return
     setBusy(true)
-    try { await dineApi.settle({ orderId: activeOrder.id, paymentMethod }); printTicket(activeOrder, { title: 'BILL', showPrices: true }); toast.success(`Table ${ctx.label} paid`); setSettleOpen(false); await refetch() }
+    try { const { data } = await dineApi.settle({ orderId: activeOrder.id, paymentMethod }); printBillTicket(data); toast.success(`Table ${ctx.label} paid`); setSettleOpen(false); await refetch() }
     catch (e) { toast.error('Failed to settle') } finally { setBusy(false) }
   }
 
@@ -175,10 +175,10 @@ export default function AdminDineIn() {
     try {
       const items = pendingItems()
       const { data: order } = await dineApi.createPosOrder({ orderType: 'TAKEAWAY', name: custName, items })
-      await dineApi.settle({ orderId: order.id, paymentMethod })
+      const { data: settled } = await dineApi.settle({ orderId: order.id, paymentMethod })
       await dineApi.clearTable(order.id)
       printRoundKot(order.id, items, 'TAKEAWAY', null)
-      printTicket({ ...order, items: items.map(i => ({ menuItemId: i.menuItemId, quantity: i.quantity, price: i.price, specialRequest: i.note, menuItem: { name: i.name } })) }, { title: 'BILL', showPrices: true })
+      printBillTicket(settled)
       toast.success('Take-away order done')
       close(); refetchRecent()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed') } finally { setBusy(false) }
@@ -295,7 +295,7 @@ export default function AdminDineIn() {
                   <div className="card p-4 text-center space-y-3">
                     <div className="text-green-600 font-semibold">Paid ₹{committedTotals.total.toFixed(0)}</div>
                     <div className="flex gap-2">
-                      <button onClick={() => printTicket(activeOrder, { title: 'BILL', showPrices: true })} className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Printer size={15} className="inline" /> Reprint bill</button>
+                      <button onClick={() => printBillTicket(activeOrder)} className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Printer size={15} className="inline" /> Reprint bill</button>
                       <button disabled={busy} onClick={clearTable} className="flex-1 btn-primary justify-center py-2.5 rounded-xl">Clear table</button>
                     </div>
                   </div>
@@ -417,7 +417,7 @@ export default function AdminDineIn() {
             </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-100">
               <button onClick={() => setEditDraft(null)} className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-sm">Cancel</button>
-              <button onClick={() => printTicket(activeOrder, { title: 'BILL', showPrices: true })} className="px-4 py-2 rounded-xl bg-stone-800 text-white text-sm">Print</button>
+              <button onClick={printBill} className="px-4 py-2 rounded-xl bg-stone-800 text-white text-sm">Print</button>
               <button disabled={busy} onClick={saveEdit} className="btn-primary px-5 py-2 rounded-xl">Update</button>
             </div>
           </div>

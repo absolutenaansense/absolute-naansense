@@ -434,17 +434,31 @@ export const dineApi = {
     return { data: { total } }
   },
 
+  // Assign a sequential bill number if the order doesn't have one yet.
+  ensureBillNo: async (orderId) => {
+    const { data: cur } = await supabase.from('Order').select('billNo').eq('id', orderId).single()
+    if (cur?.billNo) return cur.billNo
+    const { data: bn } = await supabase.rpc('next_bill_no')
+    return bn
+  },
+
   markBillPrinted: async (orderId) => {
-    const { error } = await supabase.from('Order').update({ billPrinted: true, updatedAt: new Date().toISOString() }).eq('id', orderId)
+    const billNo = await dineApi.ensureBillNo(orderId)
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ billPrinted: true, billNo, updatedAt: new Date().toISOString() })
+      .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
+    return { data }
   },
 
   // Mark paid (table shows "Paid" but stays until cleared).
   settle: async ({ orderId, paymentMethod }) => {
+    const billNo = await dineApi.ensureBillNo(orderId)
     const { data, error } = await supabase
       .from('Order')
-      .update({ paymentStatus: 'paid', paymentMethod, billPrinted: true, updatedAt: new Date().toISOString() })
-      .eq('id', orderId).select().single()
+      .update({ paymentStatus: 'paid', paymentMethod, billPrinted: true, billNo, updatedAt: new Date().toISOString() })
+      .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
     return { data }
   },
