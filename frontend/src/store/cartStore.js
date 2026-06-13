@@ -12,9 +12,16 @@ export const useCartStore = create(
         set({
           items: {
             ...items,
-            [item.id]: { item, quantity: (existing?.quantity || 0) + 1 },
+            [item.id]: { item, quantity: (existing?.quantity || 0) + 1, note: existing?.note || '' },
           },
         })
+      },
+
+      setItemNote: (itemId, note) => {
+        const { items } = get()
+        const existing = items[itemId]
+        if (!existing) return
+        set({ items: { ...items, [itemId]: { ...existing, note } } })
       },
 
       removeItem: (itemId) => {
@@ -53,10 +60,11 @@ export const useCartStore = create(
       getItemQuantity: (itemId) => get().items[itemId]?.quantity || 0,
 
       getOrderItems: () => {
-        return Object.values(get().items).map(({ item, quantity }) => ({
+        return Object.values(get().items).map(({ item, quantity, note }) => ({
           menuItemId: item.id,
           quantity,
           price: parseFloat(item.price),
+          note: note || '',
         }))
       },
     }),

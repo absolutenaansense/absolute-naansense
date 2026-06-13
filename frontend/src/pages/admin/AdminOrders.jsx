@@ -1,8 +1,10 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, X, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
+import { parseOrderNotes } from '../../utils/orderNotes'
+import { printKot } from '../../utils/printKot'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ordersApi } from '../../services/api'
 
@@ -47,11 +49,18 @@ function OrderCard({ order, refetch }) {
   const [loading, setLoading] = useState(false)
   const nextStatus = STATUS_NEXT[order.status]
 
+  const notes = parseOrderNotes(order.notes)
+  const subtotal = (order.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
+  const gst = Math.round(subtotal * 0.05)
+  const delivery = Math.max(0, Math.round(parseFloat(order.total) - subtotal - gst))
+
   const handleConfirm = async () => {
     setLoading(true)
     try {
       await ordersApi.confirmOrder(order.id)
-      toast.success('Order confirmed!')
+      printKot(order)                                  // print KOT to connected printer
+      await ordersApi.updateStatus(order.id, 'preparing') // confirm => preparing
+      toast.success('Confirmed — KOT sent to printer')
       refetch()
     } catch { toast.error('Failed to confirm') }
     finally { setLoading(false) }
@@ -112,19 +121,33 @@ function OrderCard({ order, refetch }) {
           {/* Items */}
           <div>
             <div className="text-xs font-semibold text-stone-400 uppercase mb-2">Items</div>
-            <div className="space-y-1">
-              {order.items?.map(item => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-stone-700">{item.menuItem?.name} × {item.quantity}</span>
-                  <span className="text-stone-900 font-medium">₹{(parseFloat(item.price) * item.quantity).toFixed(0)}</span>
-                </div>
-              ))}
+            <div className="space-y-1.5">
+              {order.items?.map(item => {
+                const note = notes.items?.[item.menuItemId]
+                return (
+                  <div key={item.id} className="text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-stone-700">{item.menuItem?.name} × {item.quantity}</span>
+                      <span className="text-stone-900 font-medium">₹{(parseFloat(item.price) * item.quantity).toFixed(0)}</span>
+                    </div>
+                    {note && <div className="text-xs text-amber-600 italic pl-1">↳ {note}</div>}
+                  </div>
+                )
+              })}
             </div>
-            <div className="flex justify-between text-sm font-semibold border-t border-stone-100 mt-2 pt-2">
-              <span>Total</span>
-              <span>₹{parseFloat(order.total).toFixed(0)}</span>
+            <div className="border-t border-stone-100 mt-2 pt-2 space-y-0.5">
+              <div className="flex justify-between text-xs text-stone-500"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
+              {delivery > 0 && <div className="flex justify-between text-xs text-stone-500"><span>Delivery</span><span>₹{delivery}</span></div>}
+              <div className="flex justify-between text-xs text-stone-500"><span>GST (5%)</span><span>₹{gst}</span></div>
+              <div className="flex justify-between text-sm font-semibold pt-0.5"><span>Total</span><span>₹{parseFloat(order.total).toFixed(0)}</span></div>
             </div>
           </div>
+
+          {notes.address && (
+            <div className="bg-stone-50 rounded-xl p-3 text-xs text-stone-600">
+              <span className="text-stone-400">Deliver to: </span>{notes.address}
+            </div>
+          )}
 
           {/* Payment info */}
           <div className="bg-stone-50 rounded-xl p-3 text-xs text-stone-500 flex justify-between">
@@ -141,7 +164,7 @@ function OrderCard({ order, refetch }) {
                   disabled={loading}
                   className="flex-1 btn-primary justify-center py-2.5 rounded-xl"
                 >
-                  <Check size={15} /> Confirm order
+                  <Check size={15} /> Confirm &amp; print KOT
                 </button>
                 <button
                   onClick={handleCancel}
@@ -159,6 +182,14 @@ function OrderCard({ order, refetch }) {
                 className="flex-1 btn-primary justify-center py-2.5 rounded-xl"
               >
                 Mark as {statusLabel(nextStatus)}
+              </button>
+            )}
+            {['confirmed', 'preparing', 'out_for_delivery'].includes(order.status) && (
+              <button
+                onClick={() => printKot(order)}
+                className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm font-medium flex items-center gap-1.5"
+              >
+                <Printer size={15} /> KOT
               </button>
             )}
             {['confirmed', 'preparing', 'out_for_delivery'].includes(order.status) && (

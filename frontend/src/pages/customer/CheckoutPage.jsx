@@ -9,9 +9,11 @@ import PayAheadQR from '../../components/customer/PayAheadQR'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
+import { buildOrderNotes } from '../../utils/orderNotes'
 
 const DELIVERY_FEE = 40 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
 const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
+const GST_RATE = 0.05 // 5% GST applied to every order's subtotal
 const UPI_ENABLED = false // UPI temporarily disabled — set to true to re-enable online payment
 
 const steps = ['Delivery', 'Payment', 'Confirm']
@@ -54,11 +56,12 @@ export default function CheckoutPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
-  const { items, addItem, removeItem, deleteItem, clearCart, getTotal, getOrderItems } = useCartStore()
+  const { items, addItem, removeItem, deleteItem, setItemNote, clearCart, getTotal, getOrderItems } = useCartStore()
 
   const subtotal = getTotal()
   const deliveryFee = orderType === 'DELIVERY' && subtotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0
-  const total = subtotal + deliveryFee
+  const gst = Math.round(subtotal * GST_RATE)
+  const total = subtotal + deliveryFee + gst
 
   const { data: addresses = [], refetch: refetchProfile } = useQuery({
     queryKey: ['addresses', user?.id],
@@ -88,14 +91,21 @@ export default function CheckoutPage() {
     }
     setConfirming(true)
     try {
+      const orderItems = getOrderItems()
+      const itemNotes = {}
+      orderItems.forEach(oi => { if (oi.note) itemNotes[oi.menuItemId] = oi.note })
+      const selectedAddress = addresses.find(a => a.id === selectedAddressId)
+      const addressText = selectedAddress
+        ? `${selectedAddress.line1}${selectedAddress.line2 ? ', ' + selectedAddress.line2 : ''}, ${selectedAddress.city} - ${selectedAddress.pincode}`
+        : null
       const { data } = await ordersApi.createOrder({
         userId: user.id,
-        items: getOrderItems(),
+        items: orderItems,
         addressId: selectedAddressId,
         type: orderType,
         paymentMethod,
         total,
-        notes: '',
+        notes: buildOrderNotes({ type: orderType, address: addressText, itemNotes }),
       })
       setPlacedOrder(data)
       setPaidTotal(total)
@@ -139,39 +149,49 @@ export default function CheckoutPage() {
           <div className="card p-4">
             <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Your order</div>
             <div className="space-y-3">
-              {Object.values(items).map(({ item, quantity }) => (
-                <div key={item.id} className="flex items-center justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="text-sm text-stone-700 truncate">{item.name}</div>
-                    <div className="text-xs text-stone-400">₹{parseFloat(item.price).toFixed(0)} each</div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
+              {Object.values(items).map(({ item, quantity, note }) => (
+                <div key={item.id} className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm text-stone-700 truncate">{item.name}</div>
+                      <div className="text-xs text-stone-400">₹{parseFloat(item.price).toFixed(0)} each</div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
+                        <button
+                          onClick={() => removeItem(item.id)}
+                          className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200 text-stone-600 active:scale-95"
+                          aria-label="Decrease quantity"
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="text-sm font-medium text-stone-800 w-5 text-center">{quantity}</span>
+                        <button
+                          onClick={() => addItem(item)}
+                          className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200 text-stone-600 active:scale-95"
+                          aria-label="Increase quantity"
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                      <span className="text-sm font-semibold text-stone-900 w-12 text-right">₹{(parseFloat(item.price) * quantity).toFixed(0)}</span>
                       <button
-                        onClick={() => removeItem(item.id)}
-                        className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200 text-stone-600 active:scale-95"
-                        aria-label="Decrease quantity"
+                        onClick={() => deleteItem(item.id)}
+                        className="p-1.5 text-stone-300 hover:text-red-500 active:scale-95"
+                        aria-label={`Remove ${item.name}`}
                       >
-                        <Minus size={14} />
-                      </button>
-                      <span className="text-sm font-medium text-stone-800 w-5 text-center">{quantity}</span>
-                      <button
-                        onClick={() => addItem(item)}
-                        className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200 text-stone-600 active:scale-95"
-                        aria-label="Increase quantity"
-                      >
-                        <Plus size={14} />
+                        <Trash2 size={15} />
                       </button>
                     </div>
-                    <span className="text-sm font-semibold text-stone-900 w-12 text-right">₹{(parseFloat(item.price) * quantity).toFixed(0)}</span>
-                    <button
-                      onClick={() => deleteItem(item.id)}
-                      className="p-1.5 text-stone-300 hover:text-red-500 active:scale-95"
-                      aria-label={`Remove ${item.name}`}
-                    >
-                      <Trash2 size={15} />
-                    </button>
                   </div>
+                  <input
+                    type="text"
+                    value={note || ''}
+                    onChange={(e) => setItemNote(item.id, e.target.value)}
+                    placeholder="Add a special request (e.g. extra spicy, no onion)"
+                    maxLength={120}
+                    className="w-full text-xs bg-stone-50 border border-stone-100 rounded-lg px-3 py-2 text-stone-700 placeholder:text-stone-400 focus:outline-none focus:border-brand-300"
+                  />
                 </div>
               ))}
             </div>
@@ -181,6 +201,9 @@ export default function CheckoutPage() {
               </div>
               <div className="flex justify-between text-sm text-stone-500">
                 <span>Delivery fee</span><span>{deliveryFee > 0 ? `₹${deliveryFee}` : 'Free'}</span>
+              </div>
+              <div className="flex justify-between text-sm text-stone-500">
+                <span>GST (5%)</span><span>₹{gst}</span>
               </div>
               <div className="flex justify-between text-base font-semibold text-stone-900 pt-1">
                 <span>Total</span><span>₹{total.toFixed(0)}</span>
