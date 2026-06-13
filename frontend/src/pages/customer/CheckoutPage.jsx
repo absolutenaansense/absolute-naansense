@@ -10,6 +10,7 @@ import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
 
 const DELIVERY_FEE = 0 // delivery charges removed for now — restore to 40 to re-enable
+const UPI_ENABLED = false // UPI temporarily disabled — set to true to re-enable online payment
 
 const steps = ['Delivery', 'Payment', 'Confirm']
 
@@ -37,7 +38,7 @@ export default function CheckoutPage() {
   const [step, setStep] = useState(0)
   const [orderType, setOrderType] = useState('DELIVERY')
   const [selectedAddressId, setSelectedAddressId] = useState(null)
-  const [paymentMethod, setPaymentMethod] = useState('QR_UPI')
+  const [paymentMethod, setPaymentMethod] = useState(UPI_ENABLED ? 'QR_UPI' : 'CASH_ON_DELIVERY')
   const [newAddress, setNewAddress] = useState({ label: 'Home', line1: '', line2: '', city: '', pincode: '' })
   const [showAddAddress, setShowAddAddress] = useState(false)
   const [placedOrder, setPlacedOrder] = useState(null)
@@ -264,37 +265,39 @@ export default function CheckoutPage() {
           <div className="card p-4">
             <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Payment method</div>
 
-            {!user?.isReturning && (
+            {UPI_ENABLED && !user?.isReturning && (
               <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4 text-xs text-amber-700">
                 First-time orders require payment via QR/UPI. Cash on delivery becomes available on your next order.
               </div>
             )}
 
             <div className="space-y-3">
-              <button
-                onClick={() => setPaymentMethod('QR_UPI')}
-                className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
-                  paymentMethod === 'QR_UPI' ? 'border-brand-500 bg-brand-50' : 'border-stone-100 hover:border-stone-200'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <QrCode size={20} className="text-stone-500" />
-                    <div>
-                      <div className="text-sm font-medium text-stone-800">Pay via QR / UPI</div>
-                      <div className="text-xs text-stone-500">Scan & pay — order confirmed after restaurant verifies</div>
+              {UPI_ENABLED && (
+                <button
+                  onClick={() => setPaymentMethod('QR_UPI')}
+                  className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
+                    paymentMethod === 'QR_UPI' ? 'border-brand-500 bg-brand-50' : 'border-stone-100 hover:border-stone-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <QrCode size={20} className="text-stone-500" />
+                      <div>
+                        <div className="text-sm font-medium text-stone-800">Pay via QR / UPI</div>
+                        <div className="text-xs text-stone-500">Scan & pay — order confirmed after restaurant verifies</div>
+                      </div>
                     </div>
+                    {paymentMethod === 'QR_UPI' && <Check size={16} className="text-brand-500" />}
                   </div>
-                  {paymentMethod === 'QR_UPI' && <Check size={16} className="text-brand-500" />}
-                </div>
-              </button>
+                </button>
+              )}
 
               <button
-                onClick={() => user?.isReturning && setPaymentMethod('CASH_ON_DELIVERY')}
-                disabled={!user?.isReturning}
+                onClick={() => (UPI_ENABLED ? user?.isReturning : true) && setPaymentMethod('CASH_ON_DELIVERY')}
+                disabled={UPI_ENABLED && !user?.isReturning}
                 className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
                   paymentMethod === 'CASH_ON_DELIVERY' ? 'border-brand-500 bg-brand-50' :
-                  user?.isReturning ? 'border-stone-100 hover:border-stone-200' : 'border-stone-100 opacity-50 cursor-not-allowed'
+                  (!UPI_ENABLED || user?.isReturning) ? 'border-stone-100 hover:border-stone-200' : 'border-stone-100 opacity-50 cursor-not-allowed'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -302,7 +305,7 @@ export default function CheckoutPage() {
                     <Banknote size={20} className="text-stone-500" />
                     <div>
                       <div className="text-sm font-medium text-stone-800">Cash on delivery</div>
-                      <div className="text-xs text-stone-500">{user?.isReturning ? 'Pay when your order arrives' : 'Available on your second order onwards'}</div>
+                      <div className="text-xs text-stone-500">{(!UPI_ENABLED || user?.isReturning) ? 'Pay when your order arrives' : 'Available on your second order onwards'}</div>
                     </div>
                   </div>
                   {paymentMethod === 'CASH_ON_DELIVERY' && <Check size={16} className="text-brand-500" />}
