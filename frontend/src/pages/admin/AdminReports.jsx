@@ -242,7 +242,7 @@ export default function AdminReports() {
 
       {/* View tax invoice modal (on-screen, view-only) */}
       {viewOrder && (
-        <TaxInvoiceModal order={viewOrder} onClose={() => setViewOrder(null)} />
+        <TaxInvoiceModal order={viewOrder} printable onClose={() => setViewOrder(null)} />
       )}
 
       {/* Modify tax invoice modal */}

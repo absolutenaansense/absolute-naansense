@@ -252,7 +252,7 @@ function OrderCard({ order, refetch, now }) {
           </div>
         </div>
       )}
-      {invoiceOpen && <TaxInvoiceModal order={order} onClose={() => setInvoiceOpen(false)} />}
+      {invoiceOpen && <TaxInvoiceModal order={order} printable onClose={() => setInvoiceOpen(false)} />}
 
       {cancelOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !loading && setCancelOpen(false)}>

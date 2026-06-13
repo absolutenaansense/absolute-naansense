@@ -148,6 +148,10 @@ export function printBill(order) {
   const items = order.items || []
   const type = (meta.type || '').toUpperCase()
   const heading = type === 'DINE_IN' ? `Dine In: ${meta.table || ''}` : (type === 'TAKEAWAY' ? 'Take Away' : 'Delivery')
+  // Online orders don't set customerName — fall back to the linked user.
+  const custName = meta.name || order.user?.name || ''
+  const custPhone = meta.phone || order.user?.phone || ''
+  const displayedAt = formatIST(new Date().toISOString(), 'dd MMM yyyy, h:mm:ss a')
 
   const subtotal = items.reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
   const comp = !!order.isComplimentary
@@ -198,8 +202,9 @@ export function printBill(order) {
     <div class="hr"></div>
     <div class="c doctitle">TAX INVOICE</div>
     <div class="hr"></div>
-    <div>Name: ${esc(meta.name || '')}</div>
-    ${meta.phone ? `<div>Phone: ${esc(meta.phone)}</div>` : ''}
+    <div>Displayed on ${esc(displayedAt)} IST</div>
+    <div>Name: ${esc(custName)}</div>
+    ${custPhone ? `<div>Phone: ${esc(custPhone)}</div>` : ''}
     ${meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
     <div class="row"><span>Date: ${esc(formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm'))}</span><span>${esc(heading)}</span></div>
     <div class="row"><span>Cashier: ${esc(RESTAURANT.cashier)}</span><span>Bill No.: ${order.billNo ?? '-'}</span></div>

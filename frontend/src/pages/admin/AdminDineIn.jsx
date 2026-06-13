@@ -602,7 +602,7 @@ export default function AdminDineIn() {
         </div>
       )}
 
-      {invoiceOrder && <TaxInvoiceModal order={invoiceOrder} onClose={() => setInvoiceOrder(null)} />}
+      {invoiceOrder && <TaxInvoiceModal order={invoiceOrder} printable onClose={() => setInvoiceOrder(null)} />}
     </AdminLayout>
   )
 }

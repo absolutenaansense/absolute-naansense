@@ -1,13 +1,14 @@
-import { X } from 'lucide-react'
+import { X, Printer } from 'lucide-react'
 import { formatIST } from '../utils/dateIST'
 import { getOrderMeta } from '../utils/orderNotes'
+import { printBill } from '../utils/printKot'
 import { RESTAURANT, CGST_RATE, SGST_RATE } from '../config/restaurant'
 
 const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
-// On-screen, view-only tax invoice. Mirrors the figures that printBill used to
-// compute, but renders inside the website — no PDF, no print, no download.
-export default function TaxInvoiceModal({ order, onClose }) {
+// On-screen tax invoice. Customer side is view-only; admin side passes
+// `printable` to show a Print button (which generates the printable bill).
+export default function TaxInvoiceModal({ order, onClose, printable = false }) {
   if (!order) return null
 
   const meta = getOrderMeta(order)
@@ -69,6 +70,7 @@ export default function TaxInvoiceModal({ order, onClose }) {
           <div className="text-center font-bold tracking-wider">TAX INVOICE</div>
           <div className="border-t border-dashed border-stone-300 my-2" />
 
+          <div className="text-stone-500">Displayed on {displayedAt} IST</div>
           <div>Name: {custName}</div>
           {custPhone && <div>Phone: {custPhone}</div>}
           {meta.address && <div>Address: {meta.address}</div>}
@@ -122,11 +124,15 @@ export default function TaxInvoiceModal({ order, onClose }) {
           {cancelled && <div className="text-red-600 font-bold">Status: CANCELLED</div>}
           <div className="border-t border-dashed border-stone-300 my-2" />
           <div className="text-center">{RESTAURANT.footer}</div>
-          <div className="text-center text-[11px] text-stone-400 mt-1">Displayed on {displayedAt} IST</div>
         </div>
 
-        <div className="px-4 py-3 border-t border-stone-100">
-          <button onClick={onClose} className="btn-secondary w-full justify-center">Close</button>
+        <div className="px-4 py-3 border-t border-stone-100 flex gap-2">
+          <button onClick={onClose} className="btn-secondary flex-1 justify-center">Close</button>
+          {printable && (
+            <button onClick={() => printBill(order)} className="btn-primary flex-1 justify-center">
+              <Printer size={16} /> Print
+            </button>
+          )}
         </div>
       </div>
     </div>
