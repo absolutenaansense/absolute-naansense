@@ -62,29 +62,29 @@ export function printTicket(order, opts = {}) {
   <style>
     @page { margin: 4mm; }
     * { box-sizing: border-box; }
-    body { font-family: 'Courier New', monospace; color:#000; width: 76mm; margin:0 auto; font-size: 12px; }
+    body { font-family: 'Courier New', monospace; color:#000; width: 76mm; margin:0 auto; font-size: 15px; font-weight: 600; }
     .c { text-align:center; }
-    .name { font-size: 17px; font-weight: bold; letter-spacing: .5px; }
-    .big { font-size: 15px; font-weight: bold; }
+    .name { font-size: 22px; font-weight: bold; letter-spacing: .5px; }
+    .big { font-size: 18px; font-weight: bold; }
     .hr { border-top: 1px dashed #000; margin: 6px 0; }
     .row { display:flex; justify-content:space-between; }
     table { width:100%; border-collapse: collapse; }
-    th, td { text-align:left; padding: 3px 0; vertical-align: top; }
-    th.qty, td.qty { text-align:right; width: 30px; font-weight: bold; }
-    th.pr, td.pr { text-align:right; width: 48px; }
+    th, td { text-align:left; padding: 4px 0; vertical-align: top; }
+    th.qty, td.qty { text-align:right; width: 34px; font-weight: bold; }
+    th.pr, td.pr { text-align:right; width: 52px; }
     td.it { font-weight: bold; }
-    .note { font-weight: normal; font-style: italic; font-size: 11px; padding-left: 6px; }
+    .note { font-weight: normal; font-style: italic; font-size: 13px; padding-left: 6px; }
     .tot { margin-top: 4px; }
   </style></head><body>
     <div class="c name">ABSOLUTE NAANSENSE</div>
     <div class="c">${esc(formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm'))}</div>
-    <div class="c big">${title} &mdash; ${esc(ref)}</div>
+    <div class="c big">${title}${order.kotNo != null ? ` No. ${order.kotNo}` : ` — ${esc(ref)}`}</div>
     <div class="c big">${esc(heading)}</div>
     <div class="hr"></div>
     ${order.user?.name && order.user.phone !== '0000000000' ? `<div>Customer: ${esc(order.user.name)}</div>` : ''}
     ${meta.name ? `<div>Name: ${esc(meta.name)}</div>` : ''}
-    ${order.user?.phone && order.user.phone !== '0000000000' ? `<div>Phone: ${esc(order.user.phone)}</div>` : ''}
-    ${!isDineIn && !isTakeaway && meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
+    ${(meta.phone || (order.user?.phone && order.user.phone !== '0000000000')) ? `<div>Phone: ${esc(meta.phone || order.user.phone)}</div>` : ''}
+    ${!isDineIn && meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
     <div class="hr"></div>
     <table>
       <thead><tr><th>Item</th>${showPrices ? '<th class="pr">Amt</th>' : ''}<th class="qty">Qty</th></tr></thead>
@@ -159,16 +159,16 @@ export function printBill(order) {
   <style>
     @page { margin: 4mm; }
     * { box-sizing: border-box; }
-    body { font-family: 'Courier New', monospace; color:#000; width: 76mm; margin:0 auto; font-size: 12px; }
+    body { font-family: 'Courier New', monospace; color:#000; width: 76mm; margin:0 auto; font-size: 14px; font-weight: 600; }
     .c { text-align:center; }
-    .name { font-size: 18px; font-weight: bold; }
+    .name { font-size: 21px; font-weight: bold; }
     .hr { border-top: 1px dashed #000; margin: 6px 0; }
     .row { display:flex; justify-content:space-between; }
     table { width:100%; border-collapse: collapse; }
-    th, td { text-align:left; padding: 2px 0; vertical-align: top; }
+    th, td { text-align:left; padding: 3px 0; vertical-align: top; }
     th.n, td.n { text-align:right; }
     td.it { word-break: break-word; }
-    .grand { font-size: 17px; font-weight: bold; }
+    .grand { font-size: 19px; font-weight: bold; }
   </style></head><body>
     <div class="c name">${esc(RESTAURANT.name)}</div>
     <div class="c">${esc(RESTAURANT.address)}</div>
@@ -177,6 +177,8 @@ export function printBill(order) {
     <div class="c">Mobile - ${esc(RESTAURANT.mobile)}</div>
     <div class="hr"></div>
     <div>Name: ${esc(meta.name || '')}</div>
+    ${meta.phone ? `<div>Phone: ${esc(meta.phone)}</div>` : ''}
+    ${meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
     <div class="row"><span>Date: ${esc(formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm'))}</span><span>${esc(heading)}</span></div>
     <div class="row"><span>Cashier: ${esc(RESTAURANT.cashier)}</span><span>Bill No.: ${order.billNo ?? '-'}</span></div>
     <div class="hr"></div>

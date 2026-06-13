@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Minus, X, Printer, Receipt, Search, Trash2, Clock, Pause, Play, ShoppingBag, Pencil, ArrowRightLeft } from 'lucide-react'
+import { Plus, Minus, X, Printer, Receipt, Search, Trash2, Clock, Pause, Play, ShoppingBag, Pencil, ArrowRightLeft, Truck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { menuApi, dineApi } from '../../services/api'
@@ -44,11 +44,16 @@ export default function AdminDineIn() {
   const [ctx, setCtx] = useState(null)          // null | { type:'DINE_IN', label } | { type:'TAKEAWAY' }
   const [pending, setPending] = useState({})    // { menuItemId: { item, quantity, note } }
   const [custName, setCustName] = useState('')
+  const [custPhone, setCustPhone] = useState('')
+  const [custAddress, setCustAddress] = useState('')
   const [search, setSearch] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
   const [recentOpen, setRecentOpen] = useState(false)
   const [editDraft, setEditDraft] = useState(null)  // null = closed; else [{id,name,quantity,price}]
   const [moveOpen, setMoveOpen] = useState(false)
+  const [moveTab, setMoveTab] = useState('table')   // table | kot | item
+  const [moveSel, setMoveSel] = useState([])        // selected item ids (item-wise)
+  const [moveKot, setMoveKot] = useState(null)      // selected KOT no (kot-wise)
   const [discount, setDiscount] = useState('')
   const [complimentary, setComplimentary] = useState(false)
   const [payMode, setPayMode] = useState('cash')  // cash | upi | split
@@ -72,6 +77,8 @@ export default function AdminDineIn() {
 
   const isDineIn = ctx?.type === 'DINE_IN'
   const isTakeaway = ctx?.type === 'TAKEAWAY'
+  const isDelivery = ctx?.type === 'DELIVERY'
+  const isCounter = isTakeaway || isDelivery   // one-shot counter sale modes
   const activeOrder = isDineIn ? ordersByTable[ctx.label] : null
   const activeMeta = isDineIn ? ALL_TABLES.find(t => t.label === ctx.label) : null
   const state = stateOf(activeOrder)
@@ -83,9 +90,10 @@ export default function AdminDineIn() {
   const open = (next) => {
     setCtx(next); setPending({}); setSettleOpen(false); setSearch('')
     const ord = next.type === 'DINE_IN' ? ordersByTable[next.label] : null
-    setCustName(ord ? (getOrderMeta(ord).name || '') : '')
+    const m = ord ? getOrderMeta(ord) : {}
+    setCustName(m.name || ''); setCustPhone(m.phone || ''); setCustAddress(m.address || '')
   }
-  const close = () => { setCtx(null); setPending({}); setSettleOpen(false) }
+  const close = () => { setCtx(null); setPending({}); setSettleOpen(false); setMoveOpen(false); setEditDraft(null) }
 
   const addPending = (item, category) => setPending(p => ({ ...p, [item.id]: { item, category: category ?? p[item.id]?.category ?? null, quantity: (p[item.id]?.quantity || 0) + 1, note: p[item.id]?.note || '' } }))
   const addOpenItem = (name, price) => {
@@ -101,8 +109,9 @@ export default function AdminDineIn() {
     quantity: p.quantity, price: parseFloat(p.item.price), name: p.item.name,
     note: p.note?.trim() || null, category: p.category || null,
   }))
-  const printRoundKot = (orderId, items, type, label) => printTicket({
-    id: orderId, createdAt: new Date().toISOString(), orderType: type, tableLabel: label || null, customerName: custName || null,
+  const printRoundKot = (orderId, items, type, label, kotNo) => printTicket({
+    id: orderId, kotNo, createdAt: new Date().toISOString(), orderType: type, tableLabel: label || null,
+    customerName: custName || null, customerPhone: custPhone || null, deliveryAddress: custAddress || null,
     items: items.map(i => ({
       menuItemId: i.menuItemId, quantity: i.quantity, price: i.price, specialRequest: i.note, itemName: i.itemName, category: i.category,
       menuItem: i.menuItemId ? { name: i.name, category: { name: i.category } } : null,
@@ -114,10 +123,10 @@ export default function AdminDineIn() {
     setBusy(true)
     try {
       const items = pendingItems()
-      let orderId = activeOrder?.id
-      if (activeOrder) await dineApi.addItems({ orderId, items })
-      else { const { data } = await dineApi.createPosOrder({ orderType: 'DINE_IN', table: ctx.label, name: custName, items }); orderId = data.id }
-      printRoundKot(orderId, items, 'DINE_IN', ctx.label)
+      let orderId = activeOrder?.id, kotNo
+      if (activeOrder) { const r = await dineApi.addItems({ orderId, items }); kotNo = r.kotNo }
+      else { const { data, kotNo: k } = await dineApi.createPosOrder({ orderType: 'DINE_IN', table: ctx.label, name: custName, phone: custPhone, address: custAddress, items }); orderId = data.id; kotNo = k }
+      printRoundKot(orderId, items, 'DINE_IN', ctx.label, kotNo)
       toast.success('KOT sent to kitchen')
       setPending({}); await refetch()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to send KOT') } finally { setBusy(false) }
@@ -190,26 +199,35 @@ export default function AdminDineIn() {
     } catch (e) { toast.error('Failed to update') } finally { setBusy(false) }
   }
 
-  // Move the running order to another (free) table.
-  const doMove = async (toLabel) => {
-    if (!activeOrder) return
+  // Move items to another table — whole table / a KOT round / selected items.
+  const openMove = () => { setMoveTab('table'); setMoveSel([]); setMoveKot(null); setMoveOpen(true) }
+  const kotGroups = [...new Set(committed.map(i => i.kotNo).filter(Boolean))]
+  const moveIds = moveTab === 'table' ? committed.map(i => i.id)
+    : moveTab === 'kot' ? committed.filter(i => i.kotNo === moveKot).map(i => i.id)
+    : moveSel
+  const doMoveTo = async (toLabel) => {
+    if (!activeOrder || moveIds.length === 0) return
     setBusy(true)
-    try { await dineApi.moveOrder({ orderId: activeOrder.id, tableLabel: toLabel }); toast.success(`Moved to ${toLabel}`); setMoveOpen(false); setCtx({ type: 'DINE_IN', label: toLabel }); await refetch() }
-    catch (e) { toast.error('Failed to move') } finally { setBusy(false) }
+    try {
+      await dineApi.moveItems({ fromOrderId: activeOrder.id, itemIds: moveIds, toTable: toLabel })
+      toast.success(`Moved to ${toLabel}`); setMoveOpen(false); setMoveSel([]); await refetch()
+    } catch (e) { toast.error('Failed to move') } finally { setBusy(false) }
   }
 
-  // Take-away: one-shot counter sale (create -> pay -> close), prints KOT + bill.
-  const takeawayCheckout = async (paymentMethod) => {
+  // Take-away / Delivery: one-shot counter sale (create -> pay -> close), prints KOT + bill.
+  const counterCheckout = async (paymentMethod) => {
     if (pendingArr.length === 0) { toast.error('Add items first'); return }
+    if (isDelivery && (!custName || !custPhone || !custAddress)) { toast.error('Name, phone and address required for delivery'); return }
     setBusy(true)
     try {
       const items = pendingItems()
-      const { data: order } = await dineApi.createPosOrder({ orderType: 'TAKEAWAY', name: custName, items })
+      const type = ctx.type
+      const { data: order, kotNo } = await dineApi.createPosOrder({ orderType: type, name: custName, phone: custPhone, address: custAddress, items })
       const { data: settled } = await dineApi.settle({ orderId: order.id, paymentMethod })
       await dineApi.clearTable(order.id)
-      printRoundKot(order.id, items, 'TAKEAWAY', null)
+      printRoundKot(order.id, items, type, null, kotNo)
       printBillTicket(settled)
-      toast.success('Take-away order done')
+      toast.success(`${type === 'DELIVERY' ? 'Delivery' : 'Take-away'} order done`)
       close(); refetchRecent()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed') } finally { setBusy(false) }
   }
@@ -230,6 +248,7 @@ export default function AdminDineIn() {
             ))}
           </div>
           <button onClick={() => open({ type: 'TAKEAWAY' })} className="btn-primary py-2 px-3 rounded-xl text-sm"><ShoppingBag size={15} /> Take Away</button>
+          <button onClick={() => open({ type: 'DELIVERY' })} className="btn-primary py-2 px-3 rounded-xl text-sm"><Truck size={15} /> Delivery</button>
           <button onClick={() => setRecentOpen(true)} className="btn-ghost text-stone-500 text-sm border border-stone-200 rounded-xl px-3 py-2"><Clock size={15} /> Recent</button>
         </div>
       </div>
@@ -296,7 +315,7 @@ export default function AdminDineIn() {
           <div className="w-full max-w-md bg-stone-50 h-full overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-stone-100 px-4 py-3 flex items-center justify-between z-10">
               <div>
-                <div className="font-semibold text-stone-900">{isDineIn ? `Table ${ctx.label}` : 'Take Away'}</div>
+                <div className="font-semibold text-stone-900">{isDineIn ? `Table ${ctx.label}` : isDelivery ? 'Delivery' : 'Take Away'}</div>
                 <div className="text-xs text-stone-400">
                   {isDineIn ? `${activeMeta?.section} · ` : ''}
                   {isDineIn ? (activeOrder ? `${state.charAt(0).toUpperCase() + state.slice(1)} · ${elapsedMin(activeOrder.createdAt)}m` : 'Free') : 'Counter sale'}
@@ -354,8 +373,16 @@ export default function AdminDineIn() {
               )
             })() : (
               <div className="p-4 space-y-4">
-                <input value={custName} onChange={e => setCustName(e.target.value)} placeholder="Customer name (optional)"
-                  className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2" />
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={custName} onChange={e => setCustName(e.target.value)} placeholder={`Customer name${isDelivery ? '' : ' (optional)'}`}
+                      className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2" />
+                    <input value={custPhone} onChange={e => setCustPhone(e.target.value)} placeholder={`Phone${isDelivery ? '' : ' (optional)'}`} maxLength={10}
+                      className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2" />
+                  </div>
+                  <input value={custAddress} onChange={e => setCustAddress(e.target.value)} placeholder={`Address${isDelivery ? '' : ' (optional)'}`}
+                    className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2" />
+                </div>
 
                 {/* Paid state: just clear */}
                 {isDineIn && state === 'paid' && (
@@ -445,10 +472,10 @@ export default function AdminDineIn() {
                 )}
 
                 {/* Footer actions */}
-                {isTakeaway && (
+                {isCounter && (
                   <div className="grid grid-cols-2 gap-2">
-                    <button disabled={busy} onClick={() => takeawayCheckout('CASH_ON_DELIVERY')} className="btn-primary justify-center py-3 rounded-xl">Cash &amp; Print</button>
-                    <button disabled={busy} onClick={() => takeawayCheckout('QR_UPI')} className="btn-primary justify-center py-3 rounded-xl">UPI &amp; Print</button>
+                    <button disabled={busy} onClick={() => counterCheckout('CASH_ON_DELIVERY')} className="btn-primary justify-center py-3 rounded-xl">Cash &amp; Print</button>
+                    <button disabled={busy} onClick={() => counterCheckout('QR_UPI')} className="btn-primary justify-center py-3 rounded-xl">UPI &amp; Print</button>
                   </div>
                 )}
                 {isDineIn && activeOrder && state !== 'paid' && (
@@ -459,7 +486,7 @@ export default function AdminDineIn() {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button disabled={busy || committed.length === 0} onClick={openEdit} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Pencil size={14} className="inline" /> Edit items</button>
-                      <button disabled={busy} onClick={() => setMoveOpen(true)} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><ArrowRightLeft size={14} className="inline" /> Move table</button>
+                      <button disabled={busy} onClick={openMove} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><ArrowRightLeft size={14} className="inline" /> Move</button>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button disabled={busy} onClick={toggleHold} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm">{activeOrder.isHeld ? <><Play size={14} className="inline" /> Resume</> : <><Pause size={14} className="inline" /> Hold</>}</button>
@@ -508,25 +535,59 @@ export default function AdminDineIn() {
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setMoveOpen(false)}>
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
-              <span className="font-semibold text-stone-900">Move Table {ctx.label} →</span>
+              <span className="font-semibold text-stone-900">Move — Table {ctx.label}</span>
               <button onClick={() => setMoveOpen(false)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
             </div>
-            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
-              <div className="text-xs text-stone-400">Pick a free table to move this order to.</div>
-              {FLOOR_SECTIONS.map(section => {
-                const free = section.tables.filter(t => t.label !== ctx.label && !ordersByTable[t.label])
-                if (!free.length) return null
-                return (
-                  <div key={section.name}>
-                    <div className="text-[11px] font-semibold text-stone-400 uppercase mb-1.5">{section.name}</div>
-                    <div className="grid grid-cols-4 gap-2">
-                      {free.map(t => (
-                        <button key={t.label} disabled={busy} onClick={() => doMove(t.label)} className="rounded-lg border border-stone-200 py-2 text-sm hover:border-brand-400 hover:bg-brand-50">{t.label}</button>
-                      ))}
-                    </div>
+            <div className="flex border-b border-stone-100 text-sm">
+              {[['table', 'Table Wise'], ['kot', 'KOT Wise'], ['item', 'Item Wise']].map(([k, label]) => (
+                <button key={k} onClick={() => { setMoveTab(k); setMoveSel([]); setMoveKot(null) }}
+                  className={`flex-1 py-2.5 font-medium ${moveTab === k ? 'text-brand-600 border-b-2 border-brand-500' : 'text-stone-500'}`}>{label}</button>
+              ))}
+            </div>
+            <div className="p-5 space-y-4 max-h-[55vh] overflow-y-auto">
+              {moveTab === 'table' && <div className="text-xs text-stone-400">Moves the whole table. Pick a destination.</div>}
+              {moveTab === 'kot' && (
+                <div>
+                  <div className="text-xs text-stone-400 mb-2">Select a KOT to move, then pick a destination.</div>
+                  <div className="flex flex-wrap gap-2">
+                    {kotGroups.length === 0 && <span className="text-sm text-stone-400">No KOT numbers on these items.</span>}
+                    {kotGroups.map(k => (
+                      <button key={k} onClick={() => setMoveKot(k)} className={`px-3 py-1.5 rounded-lg border text-sm ${moveKot === k ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-stone-200 text-stone-600'}`}>KOT {k} ({committed.filter(i => i.kotNo === k).length})</button>
+                    ))}
                   </div>
-                )
-              })}
+                </div>
+              )}
+              {moveTab === 'item' && (
+                <div>
+                  <div className="text-xs text-stone-400 mb-2">Tick items to move, then pick a destination.</div>
+                  <div className="space-y-1.5">
+                    {committed.map(it => (
+                      <label key={it.id} className="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked={moveSel.includes(it.id)} onChange={e => setMoveSel(s => e.target.checked ? [...s, it.id] : s.filter(x => x !== it.id))} />
+                        <span className="text-stone-700">{(it.menuItem?.name || it.itemName)} × {it.quantity}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="border-t border-stone-100 pt-3">
+                <div className="text-[11px] font-semibold text-stone-400 uppercase mb-2">Destination table {moveIds.length > 0 ? `(${moveIds.length} item${moveIds.length > 1 ? 's' : ''})` : ''}</div>
+                {FLOOR_SECTIONS.map(section => {
+                  const free = section.tables.filter(t => t.label !== ctx.label && !ordersByTable[t.label])
+                  if (!free.length) return null
+                  return (
+                    <div key={section.name} className="mb-2">
+                      <div className="text-[10px] text-stone-400 mb-1">{section.name}</div>
+                      <div className="grid grid-cols-4 gap-2">
+                        {free.map(t => (
+                          <button key={t.label} disabled={busy || moveIds.length === 0} onClick={() => doMoveTo(t.label)} className="rounded-lg border border-stone-200 py-2 text-sm hover:border-brand-400 hover:bg-brand-50 disabled:opacity-40">{t.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         </div>

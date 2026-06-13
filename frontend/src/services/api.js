@@ -309,6 +309,16 @@ export const reportsApi = {
     if (error) throw { response: { data: { error: error.message } } }
     return { data: data || [] }
   },
+
+  byBillNo: async (n) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .select('*, items:OrderItem(id, quantity, price, menuItemId, specialRequest, itemName, menuItem:MenuItem(name))')
+      .eq('billNo', n)
+      .maybeSingle()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
 }
 
 // --- Admin ---
@@ -367,17 +377,18 @@ export const addressApi = {
 // Order.userId is NOT NULL, so staff-created orders attach to a sentinel walk-in user.
 const GST_RATE = 0.05
 const WALKIN_PHONE = '0000000000'
-const POS_SELECT = '*, items:OrderItem(id, quantity, price, menuItemId, specialRequest, itemName, menuItem:MenuItem(name, category:Category(name)))'
+const POS_SELECT = '*, items:OrderItem(id, quantity, price, menuItemId, specialRequest, itemName, kotNo, menuItem:MenuItem(name, category:Category(name)))'
 
 const totalsFor = (items) => {
   const subtotal = items.reduce((s, i) => s + parseFloat(i.price) * i.quantity, 0)
   const gst = Math.round(subtotal * GST_RATE)
   return { subtotal, gst, total: subtotal + gst }
 }
-const itemRows = (orderId, items) => items.map(i => ({
+const itemRows = (orderId, items, kotNo) => items.map(i => ({
   orderId, menuItemId: i.menuItemId || null, quantity: i.quantity, price: i.price,
-  specialRequest: i.note || null, itemName: i.itemName || null,
+  specialRequest: i.note || null, itemName: i.itemName || null, kotNo: kotNo ?? null,
 }))
+const nextKotNo = async () => { const { data } = await supabase.rpc('next_kot_no'); return data }
 
 export const dineApi = {
   ensureWalkInUser: async () => {
@@ -417,28 +428,31 @@ export const dineApi = {
     return { data: data || [] }
   },
 
-  // Start a new POS order (dine-in table or take-away) with its first KOT round.
-  createPosOrder: async ({ orderType, table, name, items }) => {
+  // Start a new POS order (dine-in / take-away / delivery) with its first KOT round.
+  createPosOrder: async ({ orderType, table, name, phone, address, items }) => {
     const userId = await dineApi.ensureWalkInUser()
     const { total } = totalsFor(items)
+    const kotNo = await nextKotNo()
     const { data: order, error } = await supabase
       .from('Order')
       .insert([{
         userId, paymentMethod: 'CASH_ON_DELIVERY', total,
         orderType, tableLabel: table || null, customerName: name || null,
+        customerPhone: phone || null, deliveryAddress: address || null,
         status: 'preparing', paymentStatus: 'pending', billPrinted: false, isHeld: false,
       }])
       .select()
       .single()
     if (error) throw { response: { data: { error: error.message } } }
-    const { error: ie } = await supabase.from('OrderItem').insert(itemRows(order.id, items))
+    const { error: ie } = await supabase.from('OrderItem').insert(itemRows(order.id, items, kotNo))
     if (ie) throw { response: { data: { error: ie.message } } }
-    return { data: order }
+    return { data: order, kotNo }
   },
 
-  // Append another KOT round; recompute total and reset billPrinted (bill is now stale).
+  // Append another KOT round (new daily KOT number); recompute total, reset billPrinted.
   addItems: async ({ orderId, items }) => {
-    const { error: ie } = await supabase.from('OrderItem').insert(itemRows(orderId, items))
+    const kotNo = await nextKotNo()
+    const { error: ie } = await supabase.from('OrderItem').insert(itemRows(orderId, items, kotNo))
     if (ie) throw { response: { data: { error: ie.message } } }
     const { data: allItems } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
     const { total } = totalsFor(allItems || [])
@@ -447,7 +461,37 @@ export const dineApi = {
       .update({ total, billPrinted: false, updatedAt: new Date().toISOString() })
       .eq('id', orderId)
     if (error) throw { response: { data: { error: error.message } } }
-    return { data: { total } }
+    return { data: { total }, kotNo }
+  },
+
+  // Move items (whole table / KOT / selection) to another table's order.
+  moveItems: async ({ fromOrderId, itemIds, toTable }) => {
+    let { data: target } = await supabase.from('Order').select('id')
+      .eq('orderType', 'DINE_IN').eq('tableLabel', toTable)
+      .not('status', 'in', '("delivered","cancelled")').maybeSingle()
+    let targetId = target?.id
+    if (!targetId) {
+      const userId = await dineApi.ensureWalkInUser()
+      const { data: created, error: ce } = await supabase.from('Order')
+        .insert([{ userId, paymentMethod: 'CASH_ON_DELIVERY', total: 0, orderType: 'DINE_IN', tableLabel: toTable, status: 'preparing', paymentStatus: 'pending', billPrinted: false, isHeld: false }])
+        .select('id').single()
+      if (ce) throw { response: { data: { error: ce.message } } }
+      targetId = created.id
+    }
+    const { error } = await supabase.from('OrderItem').update({ orderId: targetId }).in('id', itemIds)
+    if (error) throw { response: { data: { error: error.message } } }
+    await dineApi.recompute(targetId)
+    await dineApi.recompute(fromOrderId)
+  },
+
+  recompute: async (orderId) => {
+    const { data: items } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
+    if (!items || items.length === 0) {
+      await supabase.from('Order').update({ status: 'cancelled', updatedAt: new Date().toISOString() }).eq('id', orderId)
+      return
+    }
+    const { total } = totalsFor(items)
+    await supabase.from('Order').update({ total, billPrinted: false, updatedAt: new Date().toISOString() }).eq('id', orderId)
   },
 
   // Assign a sequential bill number if the order doesn't have one yet.

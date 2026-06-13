@@ -1,10 +1,12 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, RefreshCw } from 'lucide-react'
+import { Download, RefreshCw, Receipt } from 'lucide-react'
+import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { reportsApi } from '../../services/api'
 import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
+import { printBill } from '../../utils/printKot'
 
 const CGST_RATE = 0.025, SGST_RATE = 0.025
 const istDay = (d) => formatIST(d, 'yyyy-MM-dd')
@@ -21,6 +23,16 @@ export default function AdminReports() {
   const [preset, setPreset] = useState('today')
   const [from, setFrom] = useState(todayIST())
   const [to, setTo] = useState(todayIST())
+  const [billNo, setBillNo] = useState('')
+
+  const viewBill = async () => {
+    if (!billNo) return
+    try {
+      const { data } = await reportsApi.byBillNo(Number(billNo))
+      if (!data) { toast.error(`No bill #${billNo}`); return }
+      printBill(data)
+    } catch { toast.error('Lookup failed') }
+  }
 
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['report-orders'],
@@ -86,6 +98,15 @@ export default function AdminReports() {
           <button onClick={() => refetch()} className="btn-ghost text-stone-500 text-sm"><RefreshCw size={14} /></button>
           <button onClick={exportCsv} className="btn-primary py-1.5 px-3 rounded-xl text-xs"><Download size={14} /> Export CSV</button>
         </div>
+      </div>
+
+      {/* Bill lookup */}
+      <div className="card p-3 mb-5 flex items-center gap-2">
+        <Receipt size={16} className="text-stone-400" />
+        <span className="text-sm text-stone-500">View bill by number:</span>
+        <input type="number" value={billNo} onChange={e => setBillNo(e.target.value)} onKeyDown={e => e.key === 'Enter' && viewBill()}
+          placeholder="Bill No." className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 w-32" />
+        <button onClick={viewBill} className="btn-primary py-1.5 px-3 rounded-xl text-xs">View / Print</button>
       </div>
 
       {/* Summary cards */}

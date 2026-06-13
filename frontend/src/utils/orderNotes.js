@@ -23,6 +23,7 @@ export function getOrderMeta(order) {
     table: order?.tableLabel || n.table || null,
     address: order?.deliveryAddress || n.address || null,
     name: order?.customerName || n.name || null,
+    phone: order?.customerPhone || n.phone || null,
     itemNotes: n.items || {},
   }
 }
