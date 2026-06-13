@@ -6,7 +6,8 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import { menuApi, dineApi } from '../../services/api'
 import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
-import { printTicket, printBill as printBillTicket } from '../../utils/printKot'
+import { printTicket } from '../../utils/printKot'
+import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 import { FLOOR_SECTIONS, ALL_TABLES } from '../../config/floorLayout'
 
 const GST_RATE = 0.05
@@ -61,6 +62,7 @@ export default function AdminDineIn() {
   const [openItem, setOpenItem] = useState({ show: false, name: '', price: '' })
   const [noteOpen, setNoteOpen] = useState({})   // pending item ids with the note field revealed
   const [busy, setBusy] = useState(false)
+  const [invoiceOrder, setInvoiceOrder] = useState(null)   // on-screen, view-only tax invoice
 
   const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
   const { data: openOrders = [], refetch } = useQuery({
@@ -137,8 +139,8 @@ export default function AdminDineIn() {
   const printBill = async () => {
     if (!activeOrder) return
     setBusy(true)
-    try { const { data } = await dineApi.markBillPrinted(activeOrder.id); printBillTicket(data); toast.success('Tax invoice printed'); await refetch() }
-    catch (e) { toast.error('Failed to print tax invoice') } finally { setBusy(false) }
+    try { const { data } = await dineApi.markBillPrinted(activeOrder.id); setInvoiceOrder(data); await refetch() }
+    catch (e) { toast.error('Failed to generate tax invoice') } finally { setBusy(false) }
   }
 
   const openSettle = () => { setDiscount(''); setComplimentary(false); setPayMode('cash'); setCashAmt(''); setSettleOpen(true) }
@@ -157,7 +159,7 @@ export default function AdminDineIn() {
     setBusy(true)
     try {
       const { data } = await dineApi.settle({ orderId: activeOrder.id, payments, discount: complimentary ? 0 : disc, complimentary })
-      printBillTicket(data); toast.success(`Table ${ctx.label} settled`); setSettleOpen(false); await refetch()
+      setInvoiceOrder(data); toast.success(`Table ${ctx.label} settled`); setSettleOpen(false); await refetch()
     } catch (e) { toast.error('Failed to settle') } finally { setBusy(false) }
   }
 
@@ -216,7 +218,7 @@ export default function AdminDineIn() {
     } catch (e) { toast.error('Failed to move') } finally { setBusy(false) }
   }
 
-  // Take-away / Delivery: one-shot counter sale (create -> pay -> close), prints KOT + bill.
+  // Take-away / Delivery: one-shot counter sale (create -> pay -> close); prints KOT, shows tax invoice on screen.
   const counterCheckout = async (paymentMethod) => {
     if (pendingArr.length === 0) { toast.error('Add items first'); return }
     if (isDelivery && (!custName || !custPhone || !custAddress)) { toast.error('Name, phone and address required for delivery'); return }
@@ -228,7 +230,7 @@ export default function AdminDineIn() {
       const { data: settled } = await dineApi.settle({ orderId: order.id, paymentMethod })
       await dineApi.clearTable(order.id)
       printRoundKot(order.id, items, type, null, kotNo)
-      printBillTicket(settled)
+      setInvoiceOrder(settled)
       toast.success(`${type === 'DELIVERY' ? 'Delivery' : 'Take-away'} order done`)
       close(); refetchRecent()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed') } finally { setBusy(false) }
@@ -392,7 +394,7 @@ export default function AdminDineIn() {
                   <div className="card p-4 text-center space-y-3 max-w-sm">
                     <div className="text-green-600 font-semibold">Paid ₹{committedTotals.total.toFixed(0)}</div>
                     <div className="flex gap-2">
-                      <button onClick={() => printBillTicket(activeOrder)} className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Printer size={15} className="inline" /> Reprint tax invoice</button>
+                      <button onClick={() => setInvoiceOrder(activeOrder)} className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Receipt size={15} className="inline" /> View tax invoice</button>
                       <button disabled={busy} onClick={clearTable} className="flex-1 btn-primary justify-center py-2.5 rounded-xl">Clear table</button>
                     </div>
                   </div>
@@ -452,7 +454,7 @@ export default function AdminDineIn() {
                       {isDineIn && activeOrder && (
                         <div className="space-y-2">
                           <div className="grid grid-cols-2 gap-2">
-                            <button disabled={busy} onClick={printBill} className="px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-sm font-medium"><Receipt size={15} className="inline" /> Print tax invoice</button>
+                            <button disabled={busy} onClick={printBill} className="px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-sm font-medium"><Receipt size={15} className="inline" /> View tax invoice</button>
                             <button disabled={busy} onClick={openSettle} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
@@ -530,7 +532,7 @@ export default function AdminDineIn() {
             </div>
             <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-100">
               <button onClick={() => setEditDraft(null)} className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-sm">Cancel</button>
-              <button onClick={printBill} className="px-4 py-2 rounded-xl bg-stone-800 text-white text-sm">Print</button>
+              <button onClick={printBill} className="px-4 py-2 rounded-xl bg-stone-800 text-white text-sm">View invoice</button>
               <button disabled={busy} onClick={saveEdit} className="btn-primary px-5 py-2 rounded-xl">Update</button>
             </div>
           </div>
@@ -599,6 +601,8 @@ export default function AdminDineIn() {
           </div>
         </div>
       )}
+
+      {invoiceOrder && <TaxInvoiceModal order={invoiceOrder} onClose={() => setInvoiceOrder(null)} />}
     </AdminLayout>
   )
 }

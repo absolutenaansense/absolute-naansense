@@ -6,19 +6,20 @@ import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
 import { etaInfo } from '../../utils/eta'
 import { getOrderMeta, itemNote } from '../../utils/orderNotes'
-import { printTicket, printBill } from '../../utils/printKot'
+import { printTicket } from '../../utils/printKot'
 import { sendKotWhatsApp } from '../../utils/whatsappKot'
 import AdminLayout from '../../components/admin/AdminLayout'
+import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 import { ordersApi } from '../../services/api'
 
 const STATUS_FILTERS = [
-  { value: '', label: 'All orders' },
   { value: 'payment_received', label: 'Awaiting confirm' },
   { value: 'confirmed', label: 'Confirmed' },
   { value: 'preparing', label: 'Preparing' },
   { value: 'out_for_delivery', label: 'Out for delivery' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'cancelled', label: 'Cancelled' },
+  { value: '', label: 'All orders' },
 ]
 
 const STATUS_NEXT = {
@@ -50,6 +51,7 @@ const statusLabel = (s) => ({
 function OrderCard({ order, refetch, now }) {
   const [expanded, setExpanded] = useState(order.status === 'payment_received')
   const [loading, setLoading] = useState(false)
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
   const nextStatus = STATUS_NEXT[order.status]
 
   const active = !['delivered', 'cancelled', 'payment_received', 'pending'].includes(order.status)
@@ -216,7 +218,7 @@ function OrderCard({ order, refetch, now }) {
                   <Printer size={15} /> KOT
                 </button>
                 <button
-                  onClick={() => printBill(order)}
+                  onClick={() => setInvoiceOpen(true)}
                   className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm font-medium flex items-center gap-1.5"
                 >
                   <Receipt size={15} /> Tax invoice
@@ -241,12 +243,13 @@ function OrderCard({ order, refetch, now }) {
           </div>
         </div>
       )}
+      {invoiceOpen && <TaxInvoiceModal order={order} onClose={() => setInvoiceOpen(false)} />}
     </div>
   )
 }
 
 export default function AdminOrders() {
-  const [filter, setFilter] = useState('')
+  const [filter, setFilter] = useState('payment_received')
   const [now, setNow] = useState(Date.now())
   const printedRef = useRef(new Set())
   const queryClient = useQueryClient()

@@ -7,7 +7,7 @@ import { etaInfo } from '../../utils/eta'
 import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, Timer, Receipt } from 'lucide-react'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import PayAheadQR from '../../components/customer/PayAheadQR'
-import { printBill } from '../../utils/printKot'
+import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 
@@ -24,6 +24,7 @@ const statusConfig = {
 function OrderCard({ order }) {
   const [liveStatus, setLiveStatus] = useState(order.status)
   const [expanded, setExpanded] = useState(false)
+  const [invoiceOpen, setInvoiceOpen] = useState(false)
 
   // Subscribe to real-time status updates for this order
   useEffect(() => {
@@ -73,7 +74,7 @@ function OrderCard({ order }) {
           <span className="text-xs text-stone-500">{order.orderType === 'TAKEAWAY' ? 'Takeaway · Cash' : order.paymentMethod === 'QR_UPI' ? 'UPI · Prepaid' : 'Cash on delivery'}</span>
           <div className="flex items-center gap-3">
             <span className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
-            <button onClick={() => printBill(order)} className="text-stone-500 text-xs flex items-center gap-0.5 hover:text-stone-800">
+            <button onClick={() => setInvoiceOpen(true)} className="text-stone-500 text-xs flex items-center gap-0.5 hover:text-stone-800">
               <Receipt size={13} /> Tax invoice
             </button>
             {isActive && (
@@ -90,6 +91,7 @@ function OrderCard({ order }) {
           {order.paymentStatus !== 'paid' && <PayAheadQR amount={order.total} />}
         </div>
       )}
+      {invoiceOpen && <TaxInvoiceModal order={order} onClose={() => setInvoiceOpen(false)} />}
     </div>
   )
 }

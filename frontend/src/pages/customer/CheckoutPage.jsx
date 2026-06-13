@@ -122,19 +122,34 @@ export default function CheckoutPage() {
     return true
   }
 
+  // Online ordering is open 10:00 AM – 11:15 PM IST (delivery + takeaway).
+  const currentIstMinutes = () => {
+    const [h, m] = formatIST(new Date().toISOString(), 'HH:mm').split(':').map(Number)
+    return h * 60 + m
+  }
+  const isWithinHours = () => { const m = currentIstMinutes(); return m >= 600 && m <= 1395 }
+  const orderingOpen = isWithinHours()
+  const hoursValid = () => {
+    if (!isWithinHours()) { toast.error('Orders can be placed only between 10:00 AM and 11:15 PM.'); return false }
+    return true
+  }
+
   const goToPayment = () => {
+    if (!hoursValid()) return
     if (orderType === 'DELIVERY' && !selectedAddressId) { toast.error('Please select a delivery address'); return }
     if (!pickupValid()) return
     setStep(1)
   }
 
   const openConfirm = () => {
+    if (!hoursValid()) return
     if (orderType === 'DELIVERY' && !selectedAddressId) { toast.error('Please select a delivery address'); return }
     if (!pickupValid()) return
     setConfirmOpen(true)
   }
 
   const handlePlaceOrder = async () => {
+    if (!hoursValid()) return
     if (orderType === 'DELIVERY' && !selectedAddressId) {
       toast.error('Please select a delivery address')
       return
@@ -445,7 +460,12 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          <button onClick={goToPayment} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
+          {!orderingOpen && (
+            <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl px-3 py-2.5 text-center">
+              We're currently closed. Orders can be placed between 10:00 AM and 11:15 PM.
+            </div>
+          )}
+          <button onClick={goToPayment} disabled={!orderingOpen} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
             Continue to payment <ChevronRight size={16} />
           </button>
         </div>
@@ -562,9 +582,14 @@ export default function CheckoutPage() {
             </div>
           )}
 
+          {!orderingOpen && (
+            <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl px-3 py-2.5 text-center">
+              We're currently closed. Orders can be placed between 10:00 AM and 11:15 PM.
+            </div>
+          )}
           <button
             onClick={openConfirm}
-            disabled={confirming}
+            disabled={confirming || !orderingOpen}
             className="btn-primary w-full justify-center py-3.5 rounded-2xl"
           >
             {confirming ? 'Placing order…' : `Place order · ₹${total.toFixed(0)}`}

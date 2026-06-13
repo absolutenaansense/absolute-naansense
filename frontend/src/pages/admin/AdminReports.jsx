@@ -6,7 +6,7 @@ import AdminLayout from '../../components/admin/AdminLayout'
 import { reportsApi, dineApi, ordersApi } from '../../services/api'
 import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
-import { printBill } from '../../utils/printKot'
+import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 
 const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
@@ -37,7 +37,7 @@ export default function AdminReports() {
     try {
       const { data } = await reportsApi.byBillNo(Number(billNo))
       if (!data) { toast.error(`No tax invoice #${billNo}`); return }
-      printBill(data)
+      setViewOrder(data)
     } catch { toast.error('Lookup failed') }
   }
 
@@ -132,7 +132,7 @@ export default function AdminReports() {
         <span className="text-sm text-stone-500">View tax invoice by number:</span>
         <input type="number" value={billNo} onChange={e => setBillNo(e.target.value)} onKeyDown={e => e.key === 'Enter' && viewBill()}
           placeholder="Invoice No." className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 w-32" />
-        <button onClick={viewBill} className="btn-primary py-1.5 px-3 rounded-xl text-xs">View / Print</button>
+        <button onClick={viewBill} className="btn-primary py-1.5 px-3 rounded-xl text-xs">View</button>
       </div>
 
       {/* Summary cards */}
@@ -191,7 +191,6 @@ export default function AdminReports() {
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1">
                       <button onClick={() => setViewOrder(r)} title="View" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Eye size={14} /></button>
-                      <button onClick={() => printBill(r)} title="Print" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Printer size={14} /></button>
                       <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>
                       <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
                     </div>
@@ -240,35 +239,12 @@ export default function AdminReports() {
         </div>
       </div>
 
-      {/* View bill modal */}
+      {/* View tax invoice modal (on-screen, view-only) */}
       {viewOrder && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setViewOrder(null)}>
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
-              <span className="font-semibold text-stone-900">Tax invoice #{viewOrder.billNo ?? '—'} · {typeLabel(viewOrder.meta)}</span>
-              <button onClick={() => setViewOrder(null)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
-            </div>
-            <div className="p-5 space-y-1.5 text-sm max-h-[60vh] overflow-y-auto">
-              <div className="text-xs text-stone-400">{formatIST(viewOrder.createdAt, 'dd MMM yyyy, h:mm a')} · {payLabel(viewOrder)} · {viewOrder.paymentStatus}</div>
-              {(viewOrder.items || []).map(it => (
-                <div key={it.id} className="flex justify-between"><span className="text-stone-700">{nameOf(it)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
-              ))}
-              <div className="border-t border-stone-100 pt-2 mt-1 space-y-1">
-                <div className="flex justify-between text-stone-500"><span>Sub Total</span><span>₹{viewOrder.subtotal.toFixed(2)}</span></div>
-                <div className="flex justify-between text-stone-500"><span>CGST 2.5%</span><span>₹{viewOrder.cgst.toFixed(2)}</span></div>
-                <div className="flex justify-between text-stone-500"><span>SGST 2.5%</span><span>₹{viewOrder.sgst.toFixed(2)}</span></div>
-                <div className="flex justify-between font-semibold"><span>Total</span><span>₹{viewOrder.grand.toFixed(2)}</span></div>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-100">
-              <button onClick={() => setViewOrder(null)} className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-sm">Close</button>
-              <button onClick={() => printBill(viewOrder)} className="btn-primary px-4 py-2 rounded-xl text-sm"><Printer size={14} /> Print</button>
-            </div>
-          </div>
-        </div>
+        <TaxInvoiceModal order={viewOrder} onClose={() => setViewOrder(null)} />
       )}
 
-      {/* Modify bill modal */}
+      {/* Modify tax invoice modal */}
       {editOrder && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setEditOrder(null)}>
           <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
