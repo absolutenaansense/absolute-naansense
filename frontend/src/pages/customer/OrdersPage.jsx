@@ -8,6 +8,7 @@ import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, T
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import PayAheadQR from '../../components/customer/PayAheadQR'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
+import { parseOrderNotes } from '../../utils/orderNotes'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 
@@ -23,21 +24,25 @@ const statusConfig = {
 
 function OrderCard({ order }) {
   const [liveStatus, setLiveStatus] = useState(order.status)
+  const [liveNotes, setLiveNotes] = useState(order.notes)
   const [expanded, setExpanded] = useState(false)
   const [invoiceOpen, setInvoiceOpen] = useState(false)
 
   // Subscribe to real-time status updates for this order
   useEffect(() => {
     setLiveStatus(order.status) // sync when parent refreshes
+    setLiveNotes(order.notes)
     const channel = supabase
       .channel(`order-badge-${order.id}`)
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'Order',
         filter: `id=eq.${order.id}`,
-      }, (payload) => setLiveStatus(payload.new.status))
+      }, (payload) => { setLiveStatus(payload.new.status); setLiveNotes(payload.new.notes) })
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [order.id, order.status])
+  }, [order.id, order.status, order.notes])
+
+  const cancelRemark = liveStatus === 'cancelled' ? parseOrderNotes(liveNotes).cancelRemark : null
 
   const [now, setNow] = useState(Date.now())
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
@@ -70,6 +75,11 @@ function OrderCard({ order }) {
           {order.items?.slice(0, 2).map(i => `${i.menuItem?.name} × ${i.quantity}`).join(', ')}
           {order.items?.length > 2 && ` +${order.items.length - 2} more`}
         </div>
+        {liveStatus === 'cancelled' && (
+          <div className="mb-3 bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700">
+            <span className="font-medium text-red-500">Order cancelled{cancelRemark ? ' — ' : ''}</span>{cancelRemark || ' by the restaurant.'}
+          </div>
+        )}
         <div className="flex items-center justify-between border-t border-stone-50 pt-3">
           <span className="text-xs text-stone-500">{order.orderType === 'TAKEAWAY' ? 'Takeaway · Cash' : order.paymentMethod === 'QR_UPI' ? 'UPI · Prepaid' : 'Cash on delivery'}</span>
           <div className="flex items-center gap-3">

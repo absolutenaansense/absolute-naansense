@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../services/supabase'
-import { CheckCircle2, Clock, ChefHat, Truck, PackageCheck, Loader2 } from 'lucide-react'
+import { CheckCircle2, Clock, ChefHat, Truck, PackageCheck, Loader2, XCircle } from 'lucide-react'
+import { parseOrderNotes } from '../../utils/orderNotes'
 
 const STEPS = [
   { status: 'payment_received', label: 'Order placed', sublabel: 'Awaiting restaurant confirmation', icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
@@ -14,14 +15,15 @@ const STATUS_INDEX = Object.fromEntries(STEPS.map((s, i) => [s.status, i]))
 
 export default function LiveOrderTracker({ orderId }) {
   const [status, setStatus] = useState('payment_received')
+  const [notes, setNotes] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // Initial fetch + polling fallback (in case a realtime event is missed).
   useEffect(() => {
     if (!orderId) return
     let active = true
-    const fetchStatus = () => supabase.from('Order').select('status').eq('id', orderId).single()
-      .then(({ data }) => { if (active && data) { setStatus(data.status); setLoading(false) } })
+    const fetchStatus = () => supabase.from('Order').select('status, notes').eq('id', orderId).single()
+      .then(({ data }) => { if (active && data) { setStatus(data.status); setNotes(data.notes); setLoading(false) } })
     fetchStatus()
     const t = setInterval(fetchStatus, 10000)
     return () => { active = false; clearInterval(t) }
@@ -40,6 +42,7 @@ export default function LiveOrderTracker({ orderId }) {
       }, (payload) => {
         const newStatus = payload.new.status
         setStatus(newStatus)
+        setNotes(payload.new.notes)
         // Show toast-style notification
         const step = STEPS.find(s => s.status === newStatus)
         if (step) {
@@ -60,6 +63,23 @@ export default function LiveOrderTracker({ orderId }) {
       <Loader2 size={18} className="animate-spin" /> Tracking your order…
     </div>
   )
+
+  if (status === 'cancelled') {
+    const remark = parseOrderNotes(notes).cancelRemark
+    return (
+      <div className="text-center py-2">
+        <XCircle size={40} className="text-red-500 mx-auto mb-2" />
+        <h3 className="text-sm font-semibold text-stone-900">Order cancelled</h3>
+        <p className="text-xs text-stone-500 mt-1">This order was cancelled by the restaurant.</p>
+        {remark && (
+          <div className="mt-3 bg-red-50 border border-red-100 rounded-xl p-3 text-xs text-red-700 text-left">
+            <span className="font-medium text-red-500">Reason: </span>{remark}
+          </div>
+        )}
+        <p className="text-xs text-center text-stone-400 mt-3">Updates automatically • no refresh needed</p>
+      </div>
+    )
+  }
 
   return (
     <div>
