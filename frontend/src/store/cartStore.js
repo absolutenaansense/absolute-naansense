@@ -30,6 +30,14 @@ export const useCartStore = create(
         }
       },
 
+      deleteItem: (itemId) => {
+        const { items } = get()
+        if (!items[itemId]) return
+        const next = { ...items }
+        delete next[itemId]
+        set({ items: next })
+      },
+
       clearCart: () => set({ items: {} }),
 
       getTotal: () => {

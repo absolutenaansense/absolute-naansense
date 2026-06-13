@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react'
+import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
@@ -52,7 +52,7 @@ export default function CheckoutPage() {
 
   const navigate = useNavigate()
   const { user } = useAuthStore()
-  const { items, clearCart, getTotal, getOrderItems } = useCartStore()
+  const { items, addItem, removeItem, deleteItem, clearCart, getTotal, getOrderItems } = useCartStore()
 
   const subtotal = getTotal()
   const deliveryFee = orderType === 'DELIVERY' && subtotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0
@@ -135,11 +135,40 @@ export default function CheckoutPage() {
         <div className="px-4 mb-4">
           <div className="card p-4">
             <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Your order</div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {Object.values(items).map(({ item, quantity }) => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span className="text-stone-600">{item.name} × {quantity}</span>
-                  <span className="font-medium text-stone-900">₹{(parseFloat(item.price) * quantity).toFixed(0)}</span>
+                <div key={item.id} className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm text-stone-700 truncate">{item.name}</div>
+                    <div className="text-xs text-stone-400">₹{parseFloat(item.price).toFixed(0)} each</div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
+                      <button
+                        onClick={() => removeItem(item.id)}
+                        className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200 text-stone-600 active:scale-95"
+                        aria-label="Decrease quantity"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="text-sm font-medium text-stone-800 w-5 text-center">{quantity}</span>
+                      <button
+                        onClick={() => addItem(item)}
+                        className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200 text-stone-600 active:scale-95"
+                        aria-label="Increase quantity"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                    <span className="text-sm font-semibold text-stone-900 w-12 text-right">₹{(parseFloat(item.price) * quantity).toFixed(0)}</span>
+                    <button
+                      onClick={() => deleteItem(item.id)}
+                      className="p-1.5 text-stone-300 hover:text-red-500 active:scale-95"
+                      aria-label={`Remove ${item.name}`}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
