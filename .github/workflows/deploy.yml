@@ -34,9 +34,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # base must match the project-pages subpath: /<repo-name>/
+      # Served at the apex custom domain (absolutenaansense.com), so base is root.
+      # The CNAME file in frontend/public/ is copied into dist/ and tells
+      # GitHub Pages which custom domain to serve.
       - name: Build
-        run: npm run build -- --base=/absolute-naansense/
+        run: npm run build -- --base=/
 
       # SPA fallback: GitHub Pages serves 404.html for unknown paths,
       # so deep links / refreshes boot the app and React Router takes over.
