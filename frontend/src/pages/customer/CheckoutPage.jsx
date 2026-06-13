@@ -320,7 +320,7 @@ export default function CheckoutPage() {
               <div className="grid grid-cols-2 gap-3 mb-4">
                 {/* Google Pay */}
                 <a
-                  href={`gpay://upi/pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR`}
+                  href={`gpay://upi/pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
                   className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-blue-200 rounded-2xl p-3.5 transition-all active:scale-95"
                 >
                   <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.9 0 6.6 1.7 8.1 3.1l6-5.8C34.5 3.5 29.7 1 24 1 14.8 1 7 6.8 3.9 14.9l7 5.4C12.6 14 17.8 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.5c0-1.6-.1-2.8-.4-4H24v7.7h12.5c-.5 2.9-2.2 5.4-4.7 7l7.2 5.6c4.2-3.9 6.6-9.6 6.6-16.3z"/><path fill="#FBBC05" d="M10.9 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.1.7-4.6l-7-5.4A23.1 23.1 0 0 0 .9 24c0 3.7.9 7.2 2.4 10.3l7.6-5.7z"/><path fill="#EA4335" d="M24 47c5.7 0 10.5-1.9 14-5.1l-7.2-5.6c-1.9 1.3-4.3 2.1-6.8 2.1-6.2 0-11.4-4.2-13.1-9.8l-7.6 5.7C7 41.2 14.9 47 24 47z"/></svg>
@@ -329,7 +329,7 @@ export default function CheckoutPage() {
 
                 {/* PhonePe */}
                 <a
-                  href={`phonepe://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR`}
+                  href={`phonepe://pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
                   className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-purple-200 rounded-2xl p-3.5 transition-all active:scale-95"
                 >
                   <svg width="22" height="22" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#5f259f"/><path fill="white" d="M31 15h-7l-8 18h5l2-4h8l1 4h5zm-6 10 3-7 1 7z"/></svg>
@@ -338,7 +338,7 @@ export default function CheckoutPage() {
 
                 {/* Paytm */}
                 <a
-                  href={`paytmmp://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR`}
+                  href={`paytmmp://pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
                   className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-sky-200 rounded-2xl p-3.5 transition-all active:scale-95"
                 >
                   <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#00BAF2"/><text x="7" y="32" fontSize="18" fontWeight="bold" fill="white">Pa</text><text x="24" y="32" fontSize="18" fontWeight="bold" fill="#012970">ytm</text></svg>
@@ -347,7 +347,7 @@ export default function CheckoutPage() {
 
                 {/* BHIM / Any UPI */}
                 <a
-                  href={`upi://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${total.toFixed(2)}&cu=INR`}
+                  href={`upi://pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
                   className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-orange-200 rounded-2xl p-3.5 transition-all active:scale-95"
                 >
                   <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#FF6B00"/><text x="8" y="30" fontSize="14" fontWeight="bold" fill="white">BHIM</text></svg>
@@ -446,7 +446,7 @@ export default function CheckoutPage() {
                     ].map(app => (
                       <a
                         key={app.scheme}
-                        href={`${app.scheme}://pay?pa=8299018895@okbizaxis&pn=Absolute+Naansense&am=${paidTotal.toFixed(2)}&cu=INR`}
+                        href={`${app.scheme}://pay?pa=8299018895@okbizaxis&am=${paidTotal.toFixed(2)}&cu=INR`}
                         onClick={() => setPaymentState('attempted')}
                         className={`flex items-center justify-center gap-1.5 text-xs font-semibold ${app.bg} ${app.text} border ${app.border} rounded-xl py-3 transition-all active:scale-95`}
                       >{app.name}</a>
