@@ -417,6 +417,18 @@ export const dineApi = {
     return { data: data || [] }
   },
 
+  // All orders from the last ~2 days with KOT-tagged items, for the KOT manager.
+  kotsRecent: async () => {
+    const since = new Date(Date.now() - 2 * 86400000).toISOString()
+    const { data, error } = await supabase
+      .from('Order')
+      .select('id, tableLabel, orderType, billPrinted, status, paymentStatus, createdAt, customerName, customerPhone, deliveryAddress, items:OrderItem(id, quantity, price, itemName, specialRequest, kotNo, menuItem:MenuItem(name, category:Category(name)))')
+      .gte('createdAt', since)
+      .order('createdAt', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: data || [] }
+  },
+
   // Recent POS orders for the side panel (any type).
   recent: async () => {
     const { data, error } = await supabase

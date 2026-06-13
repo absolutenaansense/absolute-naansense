@@ -1,9 +1,10 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingBag, Calendar, UtensilsCrossed,
-  Settings, LogOut, Bell, Armchair, BarChart3
+  Settings, LogOut, Bell, Armchair, BarChart3, ExternalLink
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
+import KotManager from './KotManager'
 
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -52,6 +53,15 @@ export default function AdminLayout({ children, title }) {
               {label}
             </NavLink>
           ))}
+          <a
+            href={import.meta.env.BASE_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all duration-150"
+          >
+            <ExternalLink size={17} />
+            Online ordering
+          </a>
         </nav>
 
         <div className="p-3 border-t border-stone-100">
@@ -64,6 +74,8 @@ export default function AdminLayout({ children, title }) {
           </button>
         </div>
       </aside>
+
+      <KotManager />
 
       {/* Main content */}
       <div className="flex-1 ml-56">

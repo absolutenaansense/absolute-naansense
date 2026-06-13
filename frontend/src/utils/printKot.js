@@ -79,6 +79,8 @@ export function printTicket(order, opts = {}) {
     <div class="c name">ABSOLUTE NAANSENSE</div>
     <div class="c">${esc(formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm'))}</div>
     <div class="c big">${title}${order.kotNo != null ? ` No. ${order.kotNo}` : ` — ${esc(ref)}`}</div>
+    ${opts.duplicate ? '<div class="c big">** DUPLICATE **</div>' : ''}
+    ${opts.modified ? '<div class="c big">** MODIFIED **</div>' : ''}
     <div class="c big">${esc(heading)}</div>
     <div class="hr"></div>
     ${order.user?.name && order.user.phone !== '0000000000' ? `<div>Customer: ${esc(order.user.name)}</div>` : ''}

@@ -416,22 +416,24 @@ export default function AdminDineIn() {
 
                       {pendingArr.length > 0 && (
                         <div className="card p-4 border-2 border-brand-200">
-                          <div className="text-xs font-semibold text-brand-500 uppercase mb-2">New KOT round</div>
+                          {committed.length > 0
+                            ? <div className="text-base font-bold text-brand-600 uppercase mb-2 tracking-wide">⚡ Running KOT</div>
+                            : <div className="text-xs font-semibold text-brand-500 uppercase mb-2">New KOT round</div>}
                           <div className="space-y-2.5">
                             {pendingArr.map(({ item, quantity, note }) => (
                               <div key={item.id} className="space-y-1.5">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-sm text-stone-700 flex-1 truncate">{item.name}</span>
+                                  <button onClick={() => setNoteOpen(o => ({ ...o, [item.id]: !o[item.id] }))} title="Add special request"
+                                    className={`w-6 h-6 flex items-center justify-center rounded-md border ${(noteOpen[item.id] || note) ? 'border-brand-400 text-brand-500 bg-brand-50' : 'border-stone-200 text-stone-400'} hover:text-brand-500`}><Plus size={13} /></button>
                                   <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
                                     <button onClick={() => decPending(item.id)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Minus size={13} /></button>
                                     <span className="text-sm font-medium w-5 text-center">{quantity}</span>
                                     <button onClick={() => addPending(item)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Plus size={13} /></button>
                                   </div>
                                 </div>
-                                {(noteOpen[item.id] || note) ? (
+                                {(noteOpen[item.id] || note) && (
                                   <input autoFocus value={note} onChange={e => setNote(item.id, e.target.value)} placeholder="Special request" className="w-full text-xs bg-stone-50 border border-stone-100 rounded-lg px-3 py-1.5" />
-                                ) : (
-                                  <button onClick={() => setNoteOpen(o => ({ ...o, [item.id]: true }))} className="text-xs text-brand-500 hover:underline">+ Add special request</button>
                                 )}
                               </div>
                             ))}
@@ -453,7 +455,7 @@ export default function AdminDineIn() {
                             <button disabled={busy} onClick={openSettle} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
-                            <button disabled={busy || committed.length === 0} onClick={openEdit} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Pencil size={14} className="inline" /> Edit items</button>
+                            <button disabled={busy || committed.length === 0} onClick={openEdit} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Pencil size={14} className="inline" /> Check items</button>
                             <button disabled={busy} onClick={openMove} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><ArrowRightLeft size={14} className="inline" /> Move</button>
                           </div>
                           <div className="grid grid-cols-2 gap-2">
