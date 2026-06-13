@@ -56,7 +56,8 @@ export default function AdminReports() {
   }
   const cancelBill = async (r) => {
     if (!confirm(`Cancel tax invoice ${r.billNo ?? ''}? This marks the order cancelled.`)) return
-    try { await ordersApi.cancelOrder(r.id); toast.success('Tax invoice cancelled'); await refetch() }
+    const remark = prompt('Cancellation remark (optional):', '') ?? ''
+    try { await ordersApi.cancelOrder(r.id, remark); toast.success('Tax invoice cancelled'); await refetch() }
     catch { toast.error('Failed to cancel') }
   }
 

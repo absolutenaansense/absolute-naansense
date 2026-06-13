@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { ShoppingBag, IndianRupee, Users, Clock } from 'lucide-react'
+import { ShoppingBag, IndianRupee, Clock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ordersApi } from '../../services/api'
@@ -37,10 +37,11 @@ export default function AdminDashboard() {
   })
 
   const todayOrders = orders.filter(o => isTodayIST(o.createdAt))
+  // Fulfilled = delivered orders (cancelled orders are never counted).
+  const fulfilledToday = todayOrders.filter(o => o.status === 'delivered').length
   // Revenue counts only fulfilled orders: paid and not cancelled.
   const todayRevenue = todayOrders.filter(o => o.paymentStatus === 'paid' && o.status !== 'cancelled').reduce((s, o) => s + parseFloat(o.total), 0)
   const pendingConfirm = orders.filter(o => o.status === 'payment_received').length
-  const totalCustomers = new Set(orders.map(o => o.userId)).size
 
   return (
     <AdminLayout>
@@ -53,10 +54,9 @@ export default function AdminDashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-3 mb-6">
-        <StatCard label="Orders today" value={todayOrders.length} icon={ShoppingBag} accent="bg-brand-500" />
+        <StatCard label="Fulfilled orders today" value={fulfilledToday} icon={ShoppingBag} accent="bg-brand-500" />
         <StatCard label="Revenue today" value={`₹${todayRevenue.toFixed(0)}`} icon={IndianRupee} accent="bg-green-500" />
         <StatCard label="Pending confirm" value={pendingConfirm} icon={Clock} accent="bg-amber-500" />
-        <StatCard label="Total customers" value={totalCustomers} icon={Users} accent="bg-blue-500" />
       </div>
 
       <div className="card p-4">

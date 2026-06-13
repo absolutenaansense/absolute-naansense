@@ -8,6 +8,8 @@ import MenuPage from './pages/customer/MenuPage'
 import CheckoutPage from './pages/customer/CheckoutPage'
 import OrdersPage from './pages/customer/OrdersPage'
 import ProfilePage from './pages/customer/ProfilePage'
+import TermsPage from './pages/customer/TermsPage'
+import PrivacyPage from './pages/customer/PrivacyPage'
 
 // Admin pages
 import AdminLoginPage from './pages/admin/AdminLoginPage'
@@ -36,6 +38,8 @@ export default function App() {
       {/* Customer routes */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/terms" element={<TermsPage />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/" element={<CustomerRoute><MenuPage /></CustomerRoute>} />
       <Route path="/checkout" element={<CustomerRoute><CheckoutPage /></CustomerRoute>} />
       <Route path="/orders" element={<CustomerRoute><OrdersPage /></CustomerRoute>} />

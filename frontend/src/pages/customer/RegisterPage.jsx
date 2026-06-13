@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/authStore'
 
 export default function RegisterPage() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', password: '', confirmPassword: '' })
+  const [agreed, setAgreed] = useState(false)
   const [loading, setLoading] = useState(false)
   const { setUser } = useAuthStore()
   const navigate = useNavigate()
@@ -15,6 +16,10 @@ export default function RegisterPage() {
     e.preventDefault()
     if (form.password !== form.confirmPassword) {
       toast.error('Passwords do not match')
+      return
+    }
+    if (!agreed) {
+      toast.error('Please accept the Terms & Conditions and Privacy Policy to continue')
       return
     }
     setLoading(true)
@@ -98,7 +103,23 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            <button type="submit" disabled={loading} className="btn-primary w-full justify-center mt-2">
+            <label className="flex items-start gap-2.5 cursor-pointer select-none pt-1">
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={e => setAgreed(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-stone-300 text-brand-500 focus:ring-brand-500 flex-shrink-0"
+              />
+              <span className="text-xs text-stone-500 leading-relaxed">
+                I agree to the{' '}
+                <Link to="/terms" target="_blank" className="text-brand-600 font-medium hover:underline">Terms &amp; Conditions</Link>
+                {' '}and{' '}
+                <Link to="/privacy" target="_blank" className="text-brand-600 font-medium hover:underline">Privacy Policy</Link>
+                {' '}of Absolute Naansense, and consent to the processing of my personal data under the DPDP Act, 2023.
+              </span>
+            </label>
+
+            <button type="submit" disabled={loading || !agreed} className="btn-primary w-full justify-center mt-2">
               {loading ? 'Creating account…' : 'Create account'}
               {!loading && <ArrowRight size={16} />}
             </button>

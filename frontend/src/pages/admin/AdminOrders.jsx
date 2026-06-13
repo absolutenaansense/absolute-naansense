@@ -52,6 +52,8 @@ function OrderCard({ order, refetch, now }) {
   const [expanded, setExpanded] = useState(order.status === 'payment_received')
   const [loading, setLoading] = useState(false)
   const [invoiceOpen, setInvoiceOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelRemark, setCancelRemark] = useState('')
   const nextStatus = STATUS_NEXT[order.status]
 
   const active = !['delivered', 'cancelled', 'payment_received', 'pending'].includes(order.status)
@@ -79,8 +81,10 @@ function OrderCard({ order, refetch, now }) {
   const handleCancel = async () => {
     setLoading(true)
     try {
-      await ordersApi.cancelOrder(order.id)
+      await ordersApi.cancelOrder(order.id, cancelRemark)
       toast.success('Order cancelled')
+      setCancelOpen(false)
+      setCancelRemark('')
       refetch()
     } catch { toast.error('Failed to cancel') }
     finally { setLoading(false) }
@@ -173,6 +177,11 @@ function OrderCard({ order, refetch, now }) {
               <span className="text-amber-500">Special request: </span>{meta.note}
             </div>
           )}
+          {order.status === 'cancelled' && meta.cancelRemark && (
+            <div className="bg-red-50 rounded-xl p-3 text-xs text-red-700">
+              <span className="text-red-500">Cancellation remark: </span>{meta.cancelRemark}
+            </div>
+          )}
 
           {/* Payment info */}
           <div className="bg-stone-50 rounded-xl p-3 text-xs text-stone-500 flex justify-between">
@@ -192,7 +201,7 @@ function OrderCard({ order, refetch, now }) {
                   <Check size={15} /> Confirm order
                 </button>
                 <button
-                  onClick={handleCancel}
+                  onClick={() => setCancelOpen(true)}
                   disabled={loading}
                   className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm font-medium"
                 >
@@ -233,7 +242,7 @@ function OrderCard({ order, refetch, now }) {
             )}
             {['confirmed', 'preparing', 'out_for_delivery'].includes(order.status) && (
               <button
-                onClick={handleCancel}
+                onClick={() => setCancelOpen(true)}
                 disabled={loading}
                 className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm font-medium"
               >
@@ -244,6 +253,29 @@ function OrderCard({ order, refetch, now }) {
         </div>
       )}
       {invoiceOpen && <TaxInvoiceModal order={order} onClose={() => setInvoiceOpen(false)} />}
+
+      {cancelOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => !loading && setCancelOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-5" onClick={e => e.stopPropagation()}>
+            <h3 className="font-semibold text-stone-900 mb-1">Cancel order</h3>
+            <p className="text-sm text-stone-500 mb-3">#{order.id?.substring(0, 8).toUpperCase()} · ₹{parseFloat(order.total).toFixed(0)}</p>
+            <label className="label">Cancellation remark <span className="text-stone-400 font-normal">(optional)</span></label>
+            <textarea
+              value={cancelRemark}
+              onChange={e => setCancelRemark(e.target.value)}
+              rows={3}
+              placeholder="e.g. Item out of stock, customer requested, address unreachable…"
+              className="input resize-none"
+            />
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setCancelOpen(false)} disabled={loading} className="btn-secondary flex-1 justify-center">Keep order</button>
+              <button onClick={handleCancel} disabled={loading} className="btn-primary flex-1 justify-center bg-red-500 hover:bg-red-600 active:bg-red-700">
+                {loading ? 'Cancelling…' : 'Cancel order'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

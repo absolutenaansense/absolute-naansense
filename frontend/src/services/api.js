@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import bcrypt from 'bcryptjs'
+import { withCancelRemark } from '../utils/orderNotes'
 
 // --- Auth ---
 export const authApi = {
@@ -60,6 +61,30 @@ export const authApi = {
       .single()
     if (error) throw { response: { data: { error: error.message } } }
     return { data }
+  },
+
+  // DPDP Act 2023 — right to erasure. Removes the customer's personal data.
+  // Saved addresses are deleted outright. The User record is hard-deleted when
+  // possible; if past orders (retained for tax/legal compliance) block the
+  // delete, the record is anonymised so no personal data remains.
+  deleteAccount: async (userId) => {
+    await supabase.from('Address').delete().eq('userId', userId)
+    const { error } = await supabase.from('User').delete().eq('id', userId)
+    if (error) {
+      const stamp = Date.now().toString(36)
+      const { error: anonErr } = await supabase
+        .from('User')
+        .update({
+          name: 'Deleted account',
+          email: null,
+          phone: `deleted-${String(userId).slice(0, 8)}-${stamp}`,
+          passwordHash: 'account-deleted',
+          isVerified: false,
+        })
+        .eq('id', userId)
+      if (anonErr) throw { response: { data: { error: anonErr.message } } }
+    }
+    return { data: { success: true } }
   },
 }
 
@@ -228,10 +253,16 @@ export const ordersApi = {
     return { data }
   },
 
-  cancelOrder: async (id) => {
+  cancelOrder: async (id, remark) => {
+    const update = { status: 'cancelled', updatedAt: new Date().toISOString() }
+    // Persist the admin's cancellation remark inside the notes blob.
+    if (remark && remark.trim()) {
+      const { data: cur } = await supabase.from('Order').select('notes').eq('id', id).single()
+      update.notes = withCancelRemark(cur?.notes, remark)
+    }
     const { data, error } = await supabase
       .from('Order')
-      .update({ status: 'cancelled', updatedAt: new Date().toISOString() })
+      .update(update)
       .eq('id', id)
       .select()
       .single()

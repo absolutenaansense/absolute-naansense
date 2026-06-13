@@ -25,8 +25,20 @@ export function getOrderMeta(order) {
     name: order?.customerName || n.name || null,
     phone: order?.customerPhone || n.phone || null,
     note: n.text || null,   // whole-order special request (plain-text notes)
+    cancelRemark: n.cancelRemark || null,   // admin's reason when an order is cancelled
     itemNotes: n.items || {},
   }
+}
+
+// Merge an admin cancellation remark into the existing notes blob without
+// disturbing the order metadata it already carries.
+export function withCancelRemark(notes, remark) {
+  const r = (remark || '').trim()
+  let obj
+  try { obj = notes ? JSON.parse(notes) : {} } catch { obj = { text: notes } }
+  if (!obj || typeof obj !== 'object') obj = {}
+  obj.cancelRemark = r || null
+  return JSON.stringify(obj)
 }
 
 // Per-item special request: prefer the OrderItem column, fall back to notes JSON.
@@ -39,7 +51,7 @@ export function parseOrderNotes(notes) {
   try {
     const o = JSON.parse(notes)
     if (o && typeof o === 'object') {
-      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {} }
+      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {}, text: o.text ?? null, cancelRemark: o.cancelRemark ?? null }
     }
   } catch {
     // Legacy plain-text note — surface it as a generic order note.

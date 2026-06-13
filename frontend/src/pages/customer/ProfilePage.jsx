@@ -1,17 +1,19 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { User, MapPin, Plus, Trash2, LogOut, Phone, Mail, Shield } from 'lucide-react'
+import { User, MapPin, Plus, Trash2, LogOut, Phone, Mail, Shield, AlertTriangle } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { useAuthStore } from '../../store/authStore'
-import { addressApi } from '../../services/api'
+import { addressApi, authApi } from '../../services/api'
 
 export default function ProfilePage() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
   const [showAdd, setShowAdd] = useState(false)
   const [newAddr, setNewAddr] = useState({ label: 'Home', line1: '', line2: '', city: '', pincode: '' })
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   const { data: addresses = [], refetch } = useQuery({
     queryKey: ['addresses', user?.id],
@@ -39,6 +41,19 @@ export default function ProfilePage() {
       await refetch()
       toast.success('Address removed')
     } catch { toast.error('Failed to remove address') }
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeleting(true)
+    try {
+      await authApi.deleteAccount(user.id)
+      toast.success('Your account and personal data have been deleted')
+      logout()
+      navigate('/register')
+    } catch {
+      toast.error('Failed to delete account. Please try again or contact us.')
+      setDeleting(false)
+    }
   }
 
   return (
@@ -139,11 +154,55 @@ export default function ProfilePage() {
         {/* Logout */}
         <button
           onClick={() => { logout(); navigate('/login') }}
-          className="btn-secondary w-full justify-center text-red-500 border-red-100 hover:bg-red-50"
+          className="btn-secondary w-full justify-center text-stone-600"
         >
           <LogOut size={16} /> Sign out
         </button>
+
+        {/* Privacy & account controls */}
+        <div className="card p-4">
+          <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Privacy & data</div>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm mb-4">
+            <Link to="/terms" className="text-brand-600 font-medium hover:underline">Terms & Conditions</Link>
+            <Link to="/privacy" className="text-brand-600 font-medium hover:underline">Privacy Policy</Link>
+          </div>
+          <p className="text-xs text-stone-500 leading-relaxed mb-3">
+            Under the DPDP Act, 2023 you may delete your account and personal data at any time. Records
+            we must keep for tax and legal compliance are retained in anonymised form.
+          </p>
+          <button
+            onClick={() => setDeleteOpen(true)}
+            className="btn-secondary w-full justify-center text-red-500 border-red-100 hover:bg-red-50"
+          >
+            <Trash2 size={16} /> Delete my account
+          </button>
+        </div>
       </div>
+
+      {/* Delete account confirmation */}
+      {deleteOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => !deleting && setDeleteOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="w-9 h-9 rounded-xl bg-red-50 flex items-center justify-center">
+                <AlertTriangle size={18} className="text-red-500" />
+              </div>
+              <h3 className="font-semibold text-stone-900">Delete your account?</h3>
+            </div>
+            <p className="text-sm text-stone-600 leading-relaxed mb-4">
+              This permanently erases your personal data — your name, contact details and saved
+              addresses. Order and tax-invoice records that we are legally required to keep are
+              retained in anonymised form. This action cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteOpen(false)} disabled={deleting} className="btn-secondary flex-1 justify-center">Cancel</button>
+              <button onClick={handleDeleteAccount} disabled={deleting} className="btn-primary flex-1 justify-center bg-red-500 hover:bg-red-600 active:bg-red-700">
+                {deleting ? 'Deleting…' : 'Delete account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </CustomerLayout>
   )
 }
