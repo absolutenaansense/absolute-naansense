@@ -11,7 +11,7 @@ import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
 import { buildOrderNotes } from '../../utils/orderNotes'
 
-const DELIVERY_FEE = 40 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
+const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
 const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
 const GST_RATE = 0.05 // 5% GST applied to every order's subtotal
 const UPI_ENABLED = false // UPI temporarily disabled — set to true to re-enable online payment
