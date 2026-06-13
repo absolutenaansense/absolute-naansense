@@ -267,8 +267,19 @@ export const reservationsApi = {
   all: async () => {
     const { data, error } = await supabase
       .from('Reservation')
-      .select('*, user:User(name, phone), table:Table(number, capacity)')
+      .select('*')
       .order('date', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { reservations: data || [] } }
+  },
+
+  cancel: async (id) => {
+    const { data, error } = await supabase
+      .from('Reservation')
+      .update({ status: 'CANCELLED', updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
     if (error) throw { response: { data: { error: error.message } } }
     return { data }
   },

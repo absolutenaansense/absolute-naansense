@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight, Plus, X, Users, Clock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { reservationsApi } from '../../services/api'
+import { FLOOR_SECTIONS } from '../../config/floorLayout'
 
 const TIME_SLOTS = ['12:00 PM', '1:00 PM', '7:00 PM', '7:30 PM', '8:00 PM', '8:30 PM', '9:00 PM', '9:30 PM']
 
@@ -12,7 +13,7 @@ export default function AdminReservations() {
   const [currentMonth, setCurrentMonth] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showModal, setShowModal] = useState(false)
-  const [form, setForm] = useState({ guestName: '', phone: '', guestCount: 2, tableId: '', timeSlot: '8:00 PM', notes: '', date: new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'}) })
+  const [form, setForm] = useState({ guestName: '', phone: '', guestCount: 2, tableLabel: '', timeSlot: '8:00 PM', notes: '', date: new Date().toLocaleDateString('en-CA', {timeZone:'Asia/Kolkata'}) })
   const queryClient = useQueryClient()
 
   const { data: reservationsData } = useQuery({
@@ -21,11 +22,6 @@ export default function AdminReservations() {
       month: currentMonth.getMonth() + 1,
       year: currentMonth.getFullYear(),
     }).then(r => r.data),
-  })
-
-  const { data: tablesData } = useQuery({
-    queryKey: ['tables'],
-    queryFn: () => reservationsApi.getTables().then(r => r.data),
   })
 
   const { mutate: createReservation, isPending } = useMutation({
@@ -47,7 +43,6 @@ export default function AdminReservations() {
   })
 
   const reservations = reservationsData?.reservations || []
-  const tables = tablesData?.tables || []
 
   const monthStart = startOfMonth(currentMonth)
   const monthEnd = endOfMonth(currentMonth)
@@ -64,7 +59,7 @@ export default function AdminReservations() {
       toast.error('Guest name and phone are required')
       return
     }
-    createReservation({ ...form, guestCount: parseInt(form.guestCount) })
+    createReservation({ ...form, guestCount: parseInt(form.guestCount), status: 'CONFIRMED' })
   }
 
   return (
@@ -160,7 +155,7 @@ export default function AdminReservations() {
                     <span className="flex items-center gap-1"><Users size={11} /> {r.guestCount} guests</span>
                     <span className="flex items-center gap-1"><Clock size={11} /> {r.timeSlot}</span>
                   </div>
-                  {r.table && <div className="text-xs text-brand-500 mt-1">{r.table.name}</div>}
+                  {r.tableLabel && <div className="text-xs text-brand-500 mt-1">Table {r.tableLabel}</div>}
                   {r.notes && <div className="text-xs text-stone-400 mt-1 italic">{r.notes}</div>}
                 </div>
               ))}
@@ -210,9 +205,15 @@ export default function AdminReservations() {
                 </div>
                 <div>
                   <label className="label">Table</label>
-                  <select className="input" value={form.tableId} onChange={e => setForm(p => ({ ...p, tableId: e.target.value }))}>
+                  <select className="input" value={form.tableLabel} onChange={e => setForm(p => ({ ...p, tableLabel: e.target.value }))}>
                     <option value="">Any table</option>
-                    {tables.map(t => <option key={t.id} value={t.id}>{t.name} (cap {t.capacity})</option>)}
+                    {FLOOR_SECTIONS.map(section => (
+                      <optgroup key={section.name} label={section.name}>
+                        {section.tables.map(t => (
+                          <option key={t.label} value={t.label}>{t.label} ({t.seats} seats)</option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                 </div>
               </div>
