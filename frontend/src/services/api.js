@@ -296,6 +296,21 @@ export const reservationsApi = {
   },
 }
 
+// --- Reports ---
+export const reportsApi = {
+  // Orders for the report views (last ~120 days), with item counts/amounts.
+  forReports: async () => {
+    const since = new Date(Date.now() - 120 * 86400000).toISOString()
+    const { data, error } = await supabase
+      .from('Order')
+      .select('id, billNo, orderType, tableLabel, customerName, paymentMethod, paymentStatus, status, total, createdAt, items:OrderItem(quantity, price)')
+      .gte('createdAt', since)
+      .order('createdAt', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: data || [] }
+  },
+}
+
 // --- Admin ---
 export const adminApi = {
   dashboard: async () => {
