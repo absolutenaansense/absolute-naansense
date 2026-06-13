@@ -9,7 +9,7 @@ import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
 
-const DELIVERY_FEE = 40
+const DELIVERY_FEE = 0 // delivery charges removed for now — restore to 40 to re-enable
 
 const steps = ['Delivery', 'Payment', 'Confirm']
 
