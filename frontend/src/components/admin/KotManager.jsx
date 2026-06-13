@@ -33,18 +33,34 @@ export default function KotManager() {
     enabled: open, refetchInterval: open ? 15000 : false,
   })
 
+  // Only KOTs the restaurant has confirmed/accepted — across every channel
+  // (dine-in, takeaway/pickup, delivery). Skip cancelled orders and online
+  // orders still awaiting payment or confirmation.
+  const SKIP = ['cancelled', 'pending', 'payment_received']
   const kots = useMemo(() => {
     const list = []
     for (const o of orders) {
-      if (o.status === 'cancelled') continue
-      const byKot = {}
-      for (const it of (o.items || [])) { if (it.kotNo != null) (byKot[it.kotNo] ||= []).push(it) }
-      for (const [k, items] of Object.entries(byKot)) {
-        list.push({ kotNo: Number(k), order: o, items, used: !!o.billPrinted || o.paymentStatus === 'paid' })
+      if (SKIP.includes(o.status)) continue
+      const items = o.items || []
+      if (!items.length) continue
+      const used = !!o.billPrinted || o.paymentStatus === 'paid'
+      const numbered = items.filter(it => it.kotNo != null)
+      if (numbered.length) {
+        const byKot = {}
+        for (const it of numbered) (byKot[it.kotNo] ||= []).push(it)
+        for (const [k, its] of Object.entries(byKot)) {
+          list.push({ kotNo: Number(k), order: o, items: its, used })
+        }
+      } else {
+        // Confirmed order whose items carry no per-item KOT number — show the
+        // whole order as a single KOT so it still appears here.
+        list.push({ kotNo: null, order: o, items, used })
       }
     }
-    return list.sort((a, b) => new Date(b.order.createdAt) - new Date(a.order.createdAt) || b.kotNo - a.kotNo)
+    return list.sort((a, b) => new Date(b.order.createdAt) - new Date(a.order.createdAt) || (b.kotNo || 0) - (a.kotNo || 0))
   }, [orders])
+
+  const kotLabel = (kot) => kot.kotNo != null ? `KOT ${kot.kotNo}` : `Order #${kot.order.id.slice(0, 6).toUpperCase()}`
 
   const where = (o) => o.orderType === 'DINE_IN' ? `Table ${o.tableLabel}` : o.orderType === 'TAKEAWAY' ? 'Take Away' : 'Delivery'
 
@@ -88,7 +104,7 @@ export default function KotManager() {
     <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/40 p-4 pt-16" onClick={() => setOpen(false)}>
       <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
-          <div className="flex items-center gap-2"><Search size={16} className="text-stone-400" /><span className="font-semibold text-stone-900">All KOTs ({kots.length})</span></div>
+          <div className="flex items-center gap-2"><Search size={16} className="text-stone-400" /><span className="font-semibold text-stone-900">Confirmed KOTs ({kots.length})</span></div>
           <button onClick={() => setOpen(false)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
         </div>
         <div className="flex items-center gap-4 px-5 py-2 text-[11px] text-stone-400 border-b border-stone-100">
@@ -96,12 +112,12 @@ export default function KotManager() {
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-stone-200 border border-stone-300" /> Used in bill</span>
         </div>
         <div className="overflow-y-auto p-3 space-y-2">
-          {kots.length === 0 && <div className="text-center text-stone-400 text-sm py-10">No KOTs today</div>}
+          {kots.length === 0 && <div className="text-center text-stone-400 text-sm py-10">No confirmed KOTs</div>}
           {kots.map(kot => (
-            <div key={kot.order.id + '-' + kot.kotNo} className={`rounded-xl border p-3 ${kot.used ? 'bg-stone-100 border-stone-200' : 'bg-white border-stone-200'}`}>
+            <div key={kot.order.id + '-' + (kot.kotNo ?? 'all')} className={`rounded-xl border p-3 ${kot.used ? 'bg-stone-100 border-stone-200' : 'bg-white border-stone-200'}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="font-semibold text-stone-800 text-sm">KOT {kot.kotNo} <span className="font-normal text-stone-400">· {where(kot.order)}</span></div>
+                  <div className="font-semibold text-stone-800 text-sm">{kotLabel(kot)} <span className="font-normal text-stone-400">· {where(kot.order)}</span></div>
                   <div className="text-xs text-stone-400">{kot.items.reduce((s, i) => s + i.quantity, 0)} items · {formatIST(kot.order.createdAt, 'dd MMM, h:mm a')}{kot.used ? ' · Used in bill' : ''}</div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
