@@ -10,7 +10,7 @@ import { supabase } from '../../services/supabase'
 
 const statusConfig = {
   pending: { label: 'Awaiting payment', icon: Clock, color: 'text-amber-600 bg-amber-50' },
-  payment_received: { label: 'Payment received', icon: Clock, color: 'text-blue-600 bg-blue-50' },
+  payment_received: { label: 'Awaiting confirmation', icon: Clock, color: 'text-blue-600 bg-blue-50' },
   confirmed: { label: 'Confirmed', icon: CheckCircle2, color: 'text-green-600 bg-green-50' },
   preparing: { label: 'Preparing', icon: Package, color: 'text-brand-600 bg-brand-50' },
   out_for_delivery: { label: 'On the way', icon: Truck, color: 'text-blue-600 bg-blue-50' },

@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabase'
 import { CheckCircle2, Clock, ChefHat, Truck, PackageCheck, Loader2 } from 'lucide-react'
 
 const STEPS = [
-  { status: 'payment_received', label: 'Payment received', sublabel: 'We got your payment', icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
+  { status: 'payment_received', label: 'Order placed', sublabel: 'Awaiting restaurant confirmation', icon: CheckCircle2, color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200' },
   { status: 'confirmed',        label: 'Order confirmed',  sublabel: 'Restaurant accepted', icon: CheckCircle2, color: 'text-blue-600',  bg: 'bg-blue-50',  border: 'border-blue-200' },
   { status: 'preparing',        label: 'Being prepared',   sublabel: 'Chef is cooking!',    icon: ChefHat,      color: 'text-brand-600', bg: 'bg-brand-50', border: 'border-brand-200' },
   { status: 'out_for_delivery', label: 'Out for delivery', sublabel: 'On the way to you',   icon: Truck,        color: 'text-purple-600',bg: 'bg-purple-50',border: 'border-purple-200' },

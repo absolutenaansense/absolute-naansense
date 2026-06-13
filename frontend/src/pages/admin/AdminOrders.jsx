@@ -34,7 +34,7 @@ const statusStyle = {
 
 const statusLabel = (s) => ({
   pending: 'Awaiting payment',
-  payment_received: 'Payment received — confirm?',
+  payment_received: 'Awaiting confirmation',
   confirmed: 'Confirmed',
   preparing: 'Preparing',
   out_for_delivery: 'Out for delivery',

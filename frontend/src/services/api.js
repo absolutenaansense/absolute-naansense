@@ -148,7 +148,10 @@ export const ordersApi = {
     // Create order
     const { data: order, error: orderError } = await supabase
       .from('Order')
-      .insert([{ userId, paymentMethod, total, notes, tableId: tableId || null, status: 'pending', paymentStatus: paymentMethod === 'cod' ? 'pending' : 'pending' }])
+      // COD orders need no payment step, so they go straight to the admin
+      // "Awaiting confirm" queue (payment_received). UPI orders wait at
+      // 'pending' until the customer marks payment as made.
+      .insert([{ userId, paymentMethod, total, notes, tableId: tableId || null, status: paymentMethod === 'QR_UPI' ? 'pending' : 'payment_received', paymentStatus: 'pending' }])
       .select()
       .single()
     if (orderError) throw { response: { data: { error: orderError.message } } }
