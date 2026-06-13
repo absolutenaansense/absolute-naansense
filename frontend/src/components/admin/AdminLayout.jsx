@@ -1,13 +1,14 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingBag, Calendar, UtensilsCrossed,
-  Settings, LogOut, Bell
+  Settings, LogOut, Bell, Armchair
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 
 const navItems = [
   { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', end: true },
   { to: '/admin/orders', icon: ShoppingBag, label: 'Orders' },
+  { to: '/admin/dine-in', icon: Armchair, label: 'Dine-in' },
   { to: '/admin/reservations', icon: Calendar, label: 'Reservations' },
   { to: '/admin/menu', icon: UtensilsCrossed, label: 'Menu' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },

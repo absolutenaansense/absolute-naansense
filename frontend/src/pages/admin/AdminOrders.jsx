@@ -218,8 +218,10 @@ export default function AdminOrders() {
     refetchInterval: 15000, // auto-refresh every 15 seconds
   })
 
-  const filtered = filter ? orders.filter(o => o.status === filter) : orders
-  const pendingCount = orders.filter(o => o.status === 'payment_received').length
+  // Dine-in orders are managed in the Dine-in page, not here.
+  const onlineOrders = orders.filter(o => parseOrderNotes(o.notes).type !== 'DINE_IN')
+  const filtered = filter ? onlineOrders.filter(o => o.status === filter) : onlineOrders
+  const pendingCount = onlineOrders.filter(o => o.status === 'payment_received').length
 
   return (
     <AdminLayout>

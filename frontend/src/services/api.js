@@ -328,3 +328,102 @@ export const addressApi = {
     return { data: { success: true } }
   },
 }
+
+// --- Dine-in POS ---
+// Dine-in orders reuse the Order/OrderItem tables. The table label + section +
+// optional customer info live in Order.notes JSON ({ type:'DINE_IN', table, ... }).
+// Order.userId is NOT NULL, so staff-created orders attach to a sentinel walk-in user.
+const GST_RATE = 0.05
+const WALKIN_PHONE = '0000000000'
+
+const totalsFor = (items) => {
+  const subtotal = items.reduce((s, i) => s + parseFloat(i.price) * i.quantity, 0)
+  const gst = Math.round(subtotal * GST_RATE)
+  return { subtotal, gst, total: subtotal + gst }
+}
+
+export const dineApi = {
+  ensureWalkInUser: async () => {
+    const { data: existing } = await supabase.from('User').select('id').eq('phone', WALKIN_PHONE).maybeSingle()
+    if (existing) return existing.id
+    const { data, error } = await supabase
+      .from('User')
+      .insert([{ name: 'Walk-in (Dine-in)', phone: WALKIN_PHONE, isVerified: true, isReturning: true }])
+      .select('id')
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return data.id
+  },
+
+  // Open (un-settled) dine-in orders with their items, for the floor view.
+  openOrders: async () => {
+    const { data, error } = await supabase
+      .from('Order')
+      .select('*, items:OrderItem(id, quantity, price, menuItemId, menuItem:MenuItem(name))')
+      .not('status', 'in', '("delivered","cancelled")')
+      .order('createdAt', { ascending: true })
+    if (error) throw { response: { data: { error: error.message } } }
+    const dine = (data || []).filter(o => {
+      try { return JSON.parse(o.notes || '{}').type === 'DINE_IN' } catch { return false }
+    })
+    return { data: dine }
+  },
+
+  // Start a table's running order with its first KOT round.
+  createTableOrder: async ({ table, section, name, phone, items, itemNotes }) => {
+    const userId = await dineApi.ensureWalkInUser()
+    const { total } = totalsFor(items)
+    const notes = JSON.stringify({ type: 'DINE_IN', table, section, name: name || null, phone: phone || null, items: itemNotes || {} })
+    const { data: order, error } = await supabase
+      .from('Order')
+      .insert([{ userId, paymentMethod: 'CASH_ON_DELIVERY', total, notes, status: 'preparing', paymentStatus: 'pending' }])
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    const rows = items.map(i => ({ orderId: order.id, menuItemId: i.menuItemId, quantity: i.quantity, price: i.price }))
+    const { error: ie } = await supabase.from('OrderItem').insert(rows)
+    if (ie) throw { response: { data: { error: ie.message } } }
+    return { data: order }
+  },
+
+  // Append another KOT round to an existing table order; recompute the total.
+  addItems: async ({ orderId, items, itemNotes }) => {
+    const { data: order } = await supabase.from('Order').select('notes').eq('id', orderId).single()
+    const rows = items.map(i => ({ orderId, menuItemId: i.menuItemId, quantity: i.quantity, price: i.price }))
+    const { error: ie } = await supabase.from('OrderItem').insert(rows)
+    if (ie) throw { response: { data: { error: ie.message } } }
+    const { data: allItems } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
+    const { total } = totalsFor(allItems || [])
+    let parsed = {}
+    try { parsed = JSON.parse(order?.notes || '{}') } catch { /* ignore */ }
+    parsed.items = { ...(parsed.items || {}), ...(itemNotes || {}) }
+    const { error } = await supabase
+      .from('Order')
+      .update({ total, notes: JSON.stringify(parsed), updatedAt: new Date().toISOString() })
+      .eq('id', orderId)
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { total } }
+  },
+
+  settle: async ({ orderId, paymentMethod }) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ status: 'delivered', paymentStatus: 'paid', paymentMethod, updatedAt: new Date().toISOString() })
+      .eq('id', orderId)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+
+  cancel: async (orderId) => {
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ status: 'cancelled', updatedAt: new Date().toISOString() })
+      .eq('id', orderId)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
+}

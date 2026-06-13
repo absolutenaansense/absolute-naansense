@@ -13,6 +13,7 @@ import ProfilePage from './pages/customer/ProfilePage'
 import AdminLoginPage from './pages/admin/AdminLoginPage'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminOrders from './pages/admin/AdminOrders'
+import AdminDineIn from './pages/admin/AdminDineIn'
 import AdminReservations from './pages/admin/AdminReservations'
 import AdminMenu from './pages/admin/AdminMenu'
 import AdminSettings from './pages/admin/AdminSettings'
@@ -42,6 +43,7 @@ export default function App() {
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
       <Route path="/admin/orders" element={<AdminRoute><AdminOrders /></AdminRoute>} />
+      <Route path="/admin/dine-in" element={<AdminRoute><AdminDineIn /></AdminRoute>} />
       <Route path="/admin/reservations" element={<AdminRoute><AdminReservations /></AdminRoute>} />
       <Route path="/admin/menu" element={<AdminRoute><AdminMenu /></AdminRoute>} />
       <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
