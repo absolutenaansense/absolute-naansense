@@ -9,7 +9,8 @@ import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
 
-const DELIVERY_FEE = 0 // delivery charges removed for now — restore to 40 to re-enable
+const DELIVERY_FEE = 40 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
+const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
 const UPI_ENABLED = false // UPI temporarily disabled — set to true to re-enable online payment
 
 const steps = ['Delivery', 'Payment', 'Confirm']
@@ -54,7 +55,7 @@ export default function CheckoutPage() {
   const { items, clearCart, getTotal, getOrderItems } = useCartStore()
 
   const subtotal = getTotal()
-  const deliveryFee = orderType === 'DELIVERY' ? DELIVERY_FEE : 0
+  const deliveryFee = orderType === 'DELIVERY' && subtotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0
   const total = subtotal + deliveryFee
 
   const { data: addresses = [], refetch: refetchProfile } = useQuery({
