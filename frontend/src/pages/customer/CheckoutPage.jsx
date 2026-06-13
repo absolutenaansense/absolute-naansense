@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react'
+import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
@@ -9,6 +9,9 @@ import PayAheadQR from '../../components/customer/PayAheadQR'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
+import { formatIST } from '../../utils/dateIST'
+import { shareOrderWhatsApp } from '../../utils/orderImage'
+import { RESTAURANT } from '../../config/restaurant'
 
 const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
 const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
@@ -48,6 +51,7 @@ export default function CheckoutPage() {
   const [confirming, setConfirming] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [paidTotal, setPaidTotal] = useState(0)
+  const [placedSnapshot, setPlacedSnapshot] = useState(null)
   const [orderComplete, setOrderComplete] = useState(false)
   const [paymentState, setPaymentState] = useState('idle') // idle | attempted | paid | failed
   const [liveStatus, setLiveStatus] = useState(null)
@@ -103,6 +107,13 @@ export default function CheckoutPage() {
         orderType,
         deliveryAddress: addressText,
       })
+      // Snapshot the order for the WhatsApp image (cart is cleared right after).
+      setPlacedSnapshot({
+        ref: data.id, name: user?.name || null, phone: user?.phone || null, address: addressText,
+        items: Object.values(items).map(({ item, quantity, note }) => ({ name: item.name, price: parseFloat(item.price), quantity, note: note || '' })),
+        subtotal, gst, deliveryFee, total,
+        dateStr: formatIST(new Date().toISOString(), 'dd/MM/yy HH:mm'),
+      })
       setPlacedOrder(data)
       setPaidTotal(total)
       setOrderComplete(true)
@@ -115,6 +126,14 @@ export default function CheckoutPage() {
     } finally {
       setConfirming(false)
     }
+  }
+
+  const handleWhatsApp = async () => {
+    if (!placedSnapshot) return
+    // Seek permission before opening WhatsApp.
+    if (!window.confirm('Open WhatsApp to send your order (as an image) to the restaurant?')) return
+    const r = await shareOrderWhatsApp(placedSnapshot)
+    if (r?.shared) toast.success('Sent to WhatsApp share')
   }
 
   const handleIvePaid = async () => {
@@ -462,6 +481,15 @@ export default function CheckoutPage() {
                   Waiting for restaurant to confirm your order…
                 </div>
               </div>
+
+              <div className="card p-4 space-y-2 text-center">
+                <div className="text-sm font-semibold text-stone-800">Send your order to the restaurant</div>
+                <div className="text-xs text-stone-500">Creates an image of your order and opens WhatsApp to send it to +{RESTAURANT.kotWhatsApp}. We'll ask before opening WhatsApp.</div>
+                <button onClick={handleWhatsApp} className="w-full justify-center py-3 rounded-2xl text-white font-medium flex items-center gap-2 bg-green-600 hover:bg-green-700">
+                  <MessageCircle size={16} /> Send on WhatsApp
+                </button>
+              </div>
+
               <PayAheadQR amount={paidTotal} />
             </>
           )}
