@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Plus, Minus, Search, ChevronRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
@@ -60,6 +60,9 @@ function MenuItemCard({ item }) {
 export default function MenuPage() {
   const [search, setSearch] = useState('')
   const [vegOnly, setVegOnly] = useState(false)
+  const [activeCat, setActiveCat] = useState(null)
+  const sectionRefs = useRef({})
+  const goTo = (id) => { setActiveCat(id); sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
   const { user } = useAuthStore()
   const cartCount = useCartStore(s => s.getCount())
   const cartTotal = useCartStore(s => s.getTotal())
@@ -116,6 +119,25 @@ export default function MenuPage() {
         </div>
       </div>
 
+      {/* Category jump bar (sticky under the header) */}
+      {filtered?.length > 0 && (
+        <div className="sticky top-14 z-30 bg-stone-50/95 backdrop-blur border-b border-stone-100 px-4 py-2 mb-2">
+          <div className="flex gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
+            {filtered.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => goTo(cat.id)}
+                className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                  activeCat === cat.id ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-stone-600 border-stone-200'
+                }`}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Menu */}
       <div className="px-4 pb-32">
         {isLoading ? (
@@ -124,7 +146,7 @@ export default function MenuPage() {
           <div className="text-center py-16 text-stone-400 text-sm">No items match your search.</div>
         ) : (
           filtered?.map(cat => (
-            <div key={cat.id} className="mb-6">
+            <div key={cat.id} ref={el => (sectionRefs.current[cat.id] = el)} className="mb-6 scroll-mt-28">
               <h3 className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">{cat.name}</h3>
               <div className="card px-4">
                 {cat.menuItems.map(item => (

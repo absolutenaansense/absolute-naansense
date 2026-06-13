@@ -389,6 +389,14 @@ export const addressApi = {
     if (error) throw { response: { data: { error: error.message } } }
     return { data: { success: true } }
   },
+
+  setDefault: async (userId, addressId) => {
+    // Clear any existing default for this user, then set the new one.
+    await supabase.from('Address').update({ isDefault: false }).eq('userId', userId)
+    const { error } = await supabase.from('Address').update({ isDefault: true }).eq('id', addressId)
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { success: true } }
+  },
 }
 
 // --- Dine-in / POS ---

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle, MessageCircle } from 'lucide-react'
@@ -55,6 +55,7 @@ export default function CheckoutPage() {
   const [orderComplete, setOrderComplete] = useState(false)
   const [paymentState, setPaymentState] = useState('idle') // idle | attempted | paid | failed
   const [liveStatus, setLiveStatus] = useState(null)
+  const orderPlacedRef = useRef(false)  // synchronous guard so clearing the cart can't redirect away
 
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -71,6 +72,19 @@ export default function CheckoutPage() {
     queryFn: () => addressApi.getAddresses(user?.id).then(r => r.data),
     enabled: !!user?.id,
   })
+
+  // Pre-select the default address (or the first) so the customer doesn't have to.
+  useEffect(() => {
+    if (!selectedAddressId && addresses.length) {
+      const def = addresses.find(a => a.isDefault) || addresses[0]
+      if (def) setSelectedAddressId(def.id)
+    }
+  }, [addresses, selectedAddressId])
+
+  const handleSetDefault = async (addressId) => {
+    try { await addressApi.setDefault(user.id, addressId); await refetchProfile(); toast.success('Default address set') }
+    catch { toast.error('Failed to set default') }
+  }
 
   const handleSaveAddress = async () => {
     if (!newAddress.line1 || !newAddress.city || !newAddress.pincode) {
@@ -114,6 +128,7 @@ export default function CheckoutPage() {
         subtotal, gst, deliveryFee, total,
         dateStr: formatIST(new Date().toISOString(), 'dd/MM/yy HH:mm'),
       })
+      orderPlacedRef.current = true   // set before clearCart so the render guard never redirects
       setPlacedOrder(data)
       setPaidTotal(total)
       setOrderComplete(true)
@@ -149,7 +164,7 @@ export default function CheckoutPage() {
     }
   }
 
-  if (Object.keys(items).length === 0 && !orderComplete) {
+  if (Object.keys(items).length === 0 && !orderComplete && !orderPlacedRef.current) {
     navigate('/')
     return null
   }
@@ -257,22 +272,30 @@ export default function CheckoutPage() {
               <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Delivery address</div>
               <div className="space-y-2">
                 {addresses.map(addr => (
-                  <button
+                  <div
                     key={addr.id}
                     onClick={() => setSelectedAddressId(addr.id)}
-                    className={`w-full text-left p-3 rounded-xl border-2 transition-all ${
+                    className={`w-full text-left p-3 rounded-xl border-2 cursor-pointer transition-all ${
                       selectedAddressId === addr.id ? 'border-brand-500 bg-brand-50' : 'border-stone-100 hover:border-stone-200'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-medium text-stone-800">{addr.label}</div>
+                        <div className="text-sm font-medium text-stone-800 flex items-center gap-2">
+                          {addr.label}
+                          {addr.isDefault && <span className="text-[10px] font-semibold bg-brand-100 text-brand-600 px-1.5 py-0.5 rounded-full">Default</span>}
+                        </div>
                         <div className="text-xs text-stone-500 mt-0.5">{addr.line1}{addr.line2 ? `, ${addr.line2}` : ''}</div>
                         <div className="text-xs text-stone-500">{addr.city} — {addr.pincode}</div>
+                        {!addr.isDefault && (
+                          <button onClick={(e) => { e.stopPropagation(); handleSetDefault(addr.id) }} className="text-[11px] text-brand-500 mt-1 hover:underline">
+                            Set as default
+                          </button>
+                        )}
                       </div>
                       {selectedAddressId === addr.id && <Check size={16} className="text-brand-500" />}
                     </div>
-                  </button>
+                  </div>
                 ))}
               </div>
 
