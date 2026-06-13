@@ -110,24 +110,25 @@ export default function AdminDineIn() {
     quantity: p.quantity, price: parseFloat(p.item.price), name: p.item.name,
     note: p.note?.trim() || null, category: p.category || null,
   }))
-  const printRoundKot = (orderId, items, type, label, kotNo) => printTicket({
+  const printRoundKot = (orderId, items, type, label, kotNo, running) => printTicket({
     id: orderId, kotNo, createdAt: new Date().toISOString(), orderType: type, tableLabel: label || null,
     customerName: custName || null, customerPhone: custPhone || null, deliveryAddress: custAddress || null,
     items: items.map(i => ({
       menuItemId: i.menuItemId, quantity: i.quantity, price: i.price, specialRequest: i.note, itemName: i.itemName, category: i.category,
       menuItem: i.menuItemId ? { name: i.name, category: { name: i.category } } : null,
     })),
-  }, { title: 'KOT', showPrices: false })
+  }, { title: 'KOT', showPrices: false, running: !!running })
 
   const sendKot = async () => {
     if (pendingArr.length === 0) { toast.error('Add items first'); return }
     setBusy(true)
     try {
       const items = pendingItems()
+      const running = !!activeOrder
       let orderId = activeOrder?.id, kotNo
       if (activeOrder) { const r = await dineApi.addItems({ orderId, items }); kotNo = r.kotNo }
       else { const { data, kotNo: k } = await dineApi.createPosOrder({ orderType: 'DINE_IN', table: ctx.label, name: custName, phone: custPhone, address: custAddress, items }); orderId = data.id; kotNo = k }
-      printRoundKot(orderId, items, 'DINE_IN', ctx.label, kotNo)
+      printRoundKot(orderId, items, 'DINE_IN', ctx.label, kotNo, running)
       toast.success('KOT sent to kitchen')
       setPending({}); await refetch()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to send KOT') } finally { setBusy(false) }

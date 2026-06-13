@@ -75,12 +75,14 @@ export function printTicket(order, opts = {}) {
     td.it { font-weight: bold; }
     .note { font-weight: normal; font-style: italic; font-size: 13px; padding-left: 6px; }
     .tot { margin-top: 4px; }
+    .banner { text-align:center; font-size: 21px; font-weight: bold; letter-spacing: 2px; border: 2px solid #000; border-radius: 4px; padding: 3px 0; margin: 5px 0; }
   </style></head><body>
     <div class="c name">ABSOLUTE NAANSENSE</div>
     <div class="c">${esc(formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm'))}</div>
     <div class="c big">${title}${order.kotNo != null ? ` No. ${order.kotNo}` : ` — ${esc(ref)}`}</div>
-    ${opts.duplicate ? '<div class="c big">** DUPLICATE **</div>' : ''}
-    ${opts.modified ? '<div class="c big">** MODIFIED **</div>' : ''}
+    ${opts.running ? '<div class="banner">RUNNING KOT</div>' : ''}
+    ${opts.duplicate ? '<div class="banner">DUPLICATE</div>' : ''}
+    ${opts.modified ? '<div class="banner">MODIFIED</div>' : ''}
     <div class="c big">${esc(heading)}</div>
     <div class="hr"></div>
     ${order.user?.name && order.user.phone !== '0000000000' ? `<div>Customer: ${esc(order.user.name)}</div>` : ''}
