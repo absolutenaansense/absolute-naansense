@@ -10,7 +10,6 @@ import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
 import { formatIST } from '../../utils/dateIST'
-import { shareOrderWhatsApp } from '../../utils/orderImage'
 import { RESTAURANT } from '../../config/restaurant'
 
 const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
@@ -50,6 +49,7 @@ export default function CheckoutPage() {
   const [showAddAddress, setShowAddAddress] = useState(false)
   const [placedOrder, setPlacedOrder] = useState(null)
   const [confirming, setConfirming] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [notifying, setNotifying] = useState(false)
   const [paidTotal, setPaidTotal] = useState(0)
   const [placedSnapshot, setPlacedSnapshot] = useState(null)
@@ -121,6 +121,12 @@ export default function CheckoutPage() {
     setStep(1)
   }
 
+  const openConfirm = () => {
+    if (orderType === 'DELIVERY' && !selectedAddressId) { toast.error('Please select a delivery address'); return }
+    if (!pickupValid()) return
+    setConfirmOpen(true)
+  }
+
   const handlePlaceOrder = async () => {
     if (orderType === 'DELIVERY' && !selectedAddressId) {
       toast.error('Please select a delivery address')
@@ -167,12 +173,24 @@ export default function CheckoutPage() {
     }
   }
 
-  const handleWhatsApp = async () => {
+  const handleWhatsApp = () => {
     if (!placedSnapshot) return
-    // Seek permission before opening WhatsApp.
-    if (!window.confirm('Open WhatsApp to send your order (as an image) to the restaurant?')) return
-    const r = await shareOrderWhatsApp(placedSnapshot)
-    if (r?.shared) toast.success('Sent to WhatsApp share')
+    // Seek permission, then open a WhatsApp chat directly to the restaurant number.
+    if (!window.confirm('Open WhatsApp to message the restaurant with your order?')) return
+    const s = placedSnapshot
+    const lines = [
+      `*${RESTAURANT.name} — New Order*`,
+      `Order #${(s.ref || '').slice(0, 8).toUpperCase()} · ${s.dateStr}`,
+      s.orderType === 'TAKEAWAY' ? `Takeaway${s.pickupAt ? ` — Pickup ${formatIST(s.pickupAt, 'dd MMM, h:mm a')}` : ''}` : 'Delivery',
+    ]
+    if (s.name) lines.push(`Name: ${s.name}`)
+    if (s.phone) lines.push(`Phone: ${s.phone}`)
+    if (s.address) lines.push(`Address: ${s.address}`)
+    lines.push('--------------------')
+    s.items.forEach(it => lines.push(`${it.quantity} x ${it.name}${it.note ? ` (${it.note})` : ''} — ₹${(it.price * it.quantity).toFixed(0)}`))
+    lines.push('--------------------')
+    lines.push(`Total: ₹${s.total.toFixed(0)} (incl. GST) · Cash`)
+    window.open(`https://wa.me/${RESTAURANT.kotWhatsApp}?text=${encodeURIComponent(lines.join('\n'))}`, '_blank')
   }
 
   const handleIvePaid = async () => {
@@ -196,6 +214,34 @@ export default function CheckoutPage() {
   return (
     <CustomerLayout showBack title="Checkout">
       <StepBar current={step} />
+
+      {/* Confirm-items prompt before placing */}
+      {confirmOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setConfirmOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-stone-100">
+              <h3 className="font-semibold text-stone-900">Confirm your order</h3>
+              <p className="text-xs text-stone-500 mt-0.5">Please review your items before placing.</p>
+            </div>
+            <div className="p-5 space-y-1.5 max-h-[45vh] overflow-y-auto">
+              {Object.values(items).map(({ item, quantity, note }) => (
+                <div key={item.id} className="text-sm">
+                  <div className="flex justify-between"><span className="text-stone-700">{item.name} × {quantity}</span><span className="font-medium">₹{(parseFloat(item.price) * quantity).toFixed(0)}</span></div>
+                  {note && <div className="text-xs text-amber-600 italic pl-1">↳ {note}</div>}
+                </div>
+              ))}
+              <div className="border-t border-stone-100 pt-2 mt-2 flex justify-between font-semibold text-stone-900"><span>Total (incl. GST)</span><span>₹{total.toFixed(0)}</span></div>
+            </div>
+            <div className="px-5">
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-700">⚠ Orders once placed cannot be modified or cancelled.</div>
+            </div>
+            <div className="flex gap-2 p-5">
+              <button onClick={() => setConfirmOpen(false)} className="btn-secondary flex-1 justify-center">Modify order</button>
+              <button disabled={confirming} onClick={() => { setConfirmOpen(false); handlePlaceOrder() }} className="btn-primary flex-1 justify-center">{confirming ? 'Placing…' : 'Confirm order'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Order summary (always visible) */}
       {step < 2 && (
@@ -496,7 +542,7 @@ export default function CheckoutPage() {
           )}
 
           <button
-            onClick={handlePlaceOrder}
+            onClick={openConfirm}
             disabled={confirming}
             className="btn-primary w-full justify-center py-3.5 rounded-2xl"
           >
@@ -546,7 +592,7 @@ export default function CheckoutPage() {
               <button onClick={handleWhatsApp} className="w-full justify-center py-4 rounded-2xl text-white font-semibold flex items-center gap-2 bg-green-600 hover:bg-green-700 shadow-sm">
                 <MessageCircle size={18} /> Send order to restaurant on WhatsApp
               </button>
-              <div className="text-xs text-stone-400 text-center -mt-1">Sends your order as an image to +{RESTAURANT.kotWhatsApp}. We'll ask before opening WhatsApp.</div>
+              <div className="text-xs text-stone-400 text-center -mt-1">Opens a WhatsApp chat with the restaurant (+{RESTAURANT.kotWhatsApp}), order pre-filled. We'll ask first.</div>
 
               {/* Full order details */}
               {placedSnapshot && (
