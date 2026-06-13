@@ -205,9 +205,13 @@ export const ordersApi = {
   },
 
   confirmOrder: async (id) => {
+    // Assign a sequential (per-financial-year) bill number if not already set.
+    const { data: cur } = await supabase.from('Order').select('billNo').eq('id', id).single()
+    let billNo = cur?.billNo
+    if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no'); billNo = bn }
     const { data, error } = await supabase
       .from('Order')
-      .update({ status: 'confirmed', paymentStatus: 'paid', updatedAt: new Date().toISOString() })
+      .update({ status: 'confirmed', paymentStatus: 'paid', billNo, updatedAt: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()
