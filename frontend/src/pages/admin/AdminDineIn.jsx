@@ -59,6 +59,7 @@ export default function AdminDineIn() {
   const [payMode, setPayMode] = useState('cash')  // cash | upi | split
   const [cashAmt, setCashAmt] = useState('')
   const [openItem, setOpenItem] = useState({ show: false, name: '', price: '' })
+  const [noteOpen, setNoteOpen] = useState({})   // pending item ids with the note field revealed
   const [busy, setBusy] = useState(false)
 
   const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
@@ -312,7 +313,7 @@ export default function AdminDineIn() {
       {/* Order panel */}
       {ctx && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={close}>
-          <div className="w-full max-w-md bg-stone-50 h-full overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="w-full max-w-3xl bg-stone-50 h-full overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-stone-100 px-4 py-3 flex items-center justify-between z-10">
               <div>
                 <div className="font-semibold text-stone-900">{isDineIn ? `Table ${ctx.label}` : isDelivery ? 'Delivery' : 'Take Away'}</div>
@@ -373,6 +374,7 @@ export default function AdminDineIn() {
               )
             })() : (
               <div className="p-4 space-y-4">
+                {/* Customer details (full width) */}
                 <div className="space-y-2">
                   <div className="grid grid-cols-2 gap-2">
                     <input value={custName} onChange={e => setCustName(e.target.value)} placeholder={`Customer name${isDelivery ? '' : ' (optional)'}`}
@@ -384,113 +386,115 @@ export default function AdminDineIn() {
                     className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2" />
                 </div>
 
-                {/* Paid state: just clear */}
-                {isDineIn && state === 'paid' && (
-                  <div className="card p-4 text-center space-y-3">
+                {isDineIn && state === 'paid' ? (
+                  /* Paid state: just clear */
+                  <div className="card p-4 text-center space-y-3 max-w-sm">
                     <div className="text-green-600 font-semibold">Paid ₹{committedTotals.total.toFixed(0)}</div>
                     <div className="flex gap-2">
                       <button onClick={() => printBillTicket(activeOrder)} className="flex-1 px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Printer size={15} className="inline" /> Reprint bill</button>
                       <button disabled={busy} onClick={clearTable} className="flex-1 btn-primary justify-center py-2.5 rounded-xl">Clear table</button>
                     </div>
                   </div>
-                )}
-
-                {/* Committed items */}
-                {committed.length > 0 && state !== 'paid' && (
-                  <div className="card p-4">
-                    <div className="text-xs font-semibold text-stone-400 uppercase mb-2">Ordered</div>
-                    <div className="space-y-1.5">
-                      {committed.map(it => (
-                        <div key={it.id} className="text-sm">
-                          <div className="flex justify-between"><span className="text-stone-700">{(it.menuItem?.name || it.itemName)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
-                          {it.specialRequest && <div className="text-xs text-amber-600 italic pl-1">↳ {it.specialRequest}</div>}
-                        </div>
-                      ))}
-                    </div>
-                    <div className="border-t border-stone-100 mt-2 pt-2 flex justify-between text-sm font-semibold"><span>Running total (incl. GST)</span><span>₹{committedTotals.total.toFixed(0)}</span></div>
-                  </div>
-                )}
-
-                {/* Pending round */}
-                {pendingArr.length > 0 && (
-                  <div className="card p-4 border-2 border-brand-200">
-                    <div className="text-xs font-semibold text-brand-500 uppercase mb-2">New KOT round</div>
-                    <div className="space-y-2.5">
-                      {pendingArr.map(({ item, quantity, note }) => (
-                        <div key={item.id} className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-sm text-stone-700 flex-1 truncate">{item.name}</span>
-                            <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
-                              <button onClick={() => decPending(item.id)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Minus size={13} /></button>
-                              <span className="text-sm font-medium w-5 text-center">{quantity}</span>
-                              <button onClick={() => addPending(item)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Plus size={13} /></button>
-                            </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                    {/* LEFT: the order */}
+                    <div className="space-y-4">
+                      {committed.length > 0 && (
+                        <div className="card p-4">
+                          <div className="text-xs font-semibold text-stone-400 uppercase mb-2">Ordered</div>
+                          <div className="space-y-1.5">
+                            {committed.map(it => (
+                              <div key={it.id} className="text-sm">
+                                <div className="flex justify-between"><span className="text-stone-700">{(it.menuItem?.name || it.itemName)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
+                                {it.specialRequest && <div className="text-xs text-amber-600 italic pl-1">↳ {it.specialRequest}</div>}
+                              </div>
+                            ))}
                           </div>
-                          <input value={note} onChange={e => setNote(item.id, e.target.value)} placeholder="Special request (optional)" className="w-full text-xs bg-stone-50 border border-stone-100 rounded-lg px-3 py-1.5" />
+                          <div className="border-t border-stone-100 mt-2 pt-2 flex justify-between text-sm font-semibold"><span>Running total (incl. GST)</span><span>₹{committedTotals.total.toFixed(0)}</span></div>
                         </div>
-                      ))}
-                    </div>
-                    {isDineIn
-                      ? <button disabled={busy} onClick={sendKot} className="btn-primary w-full justify-center py-2.5 rounded-xl mt-3"><Printer size={15} /> Send KOT (₹{pendingTotals.total.toFixed(0)})</button>
-                      : null}
-                  </div>
-                )}
+                      )}
 
-                {/* Menu picker (hidden in paid state) */}
-                {state !== 'paid' && (
-                  <div className="card p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <div className="relative flex-1">
-                        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu…" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2" />
-                      </div>
-                      <button onClick={() => setOpenItem(o => ({ ...o, show: !o.show }))} className="text-xs font-medium px-3 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 whitespace-nowrap">+ Open Item</button>
-                    </div>
-                    {openItem.show && (
-                      <div className="flex items-center gap-2 mb-3 p-2 bg-stone-50 rounded-lg">
-                        <input value={openItem.name} onChange={e => setOpenItem(o => ({ ...o, name: e.target.value }))} placeholder="Item name" className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-1.5" />
-                        <input value={openItem.price} onChange={e => setOpenItem(o => ({ ...o, price: e.target.value }))} type="number" placeholder="₹" className="w-20 text-sm bg-white border border-stone-200 rounded-lg px-3 py-1.5" />
-                        <button
-                          onClick={() => { if (openItem.name && openItem.price) { addOpenItem(openItem.name.trim(), openItem.price); setOpenItem({ show: false, name: '', price: '' }) } }}
-                          className="btn-primary py-1.5 px-3 rounded-lg text-sm">Add</button>
-                      </div>
-                    )}
-                    <div className="space-y-3 max-h-72 overflow-y-auto">
-                      {filteredMenu.map(cat => (
-                        <div key={cat.id}>
-                          <div className="text-[11px] font-semibold text-stone-400 uppercase mb-1">{cat.name}</div>
-                          {cat.menuItems.map(item => (
-                            <button key={item.id} onClick={() => addPending(item, cat.name)} className="w-full flex items-center justify-between py-2 border-b border-stone-50 hover:bg-stone-50 rounded px-1 text-left">
-                              <span className="text-sm text-stone-700">{item.name}</span>
-                              <span className="flex items-center gap-2 text-sm text-stone-500">₹{parseFloat(item.price).toFixed(0)}<Plus size={14} className="text-brand-500" /></span>
-                            </button>
-                          ))}
+                      {pendingArr.length > 0 && (
+                        <div className="card p-4 border-2 border-brand-200">
+                          <div className="text-xs font-semibold text-brand-500 uppercase mb-2">New KOT round</div>
+                          <div className="space-y-2.5">
+                            {pendingArr.map(({ item, quantity, note }) => (
+                              <div key={item.id} className="space-y-1.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-sm text-stone-700 flex-1 truncate">{item.name}</span>
+                                  <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
+                                    <button onClick={() => decPending(item.id)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Minus size={13} /></button>
+                                    <span className="text-sm font-medium w-5 text-center">{quantity}</span>
+                                    <button onClick={() => addPending(item)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Plus size={13} /></button>
+                                  </div>
+                                </div>
+                                {(noteOpen[item.id] || note) ? (
+                                  <input autoFocus value={note} onChange={e => setNote(item.id, e.target.value)} placeholder="Special request" className="w-full text-xs bg-stone-50 border border-stone-100 rounded-lg px-3 py-1.5" />
+                                ) : (
+                                  <button onClick={() => setNoteOpen(o => ({ ...o, [item.id]: true }))} className="text-xs text-brand-500 hover:underline">+ Add special request</button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {isDineIn && <button disabled={busy} onClick={sendKot} className="btn-primary w-full justify-center py-2.5 rounded-xl mt-3"><Printer size={15} /> Send KOT (₹{pendingTotals.total.toFixed(0)})</button>}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                      )}
 
-                {/* Footer actions */}
-                {isCounter && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <button disabled={busy} onClick={() => counterCheckout('CASH_ON_DELIVERY')} className="btn-primary justify-center py-3 rounded-xl">Cash &amp; Print</button>
-                    <button disabled={busy} onClick={() => counterCheckout('QR_UPI')} className="btn-primary justify-center py-3 rounded-xl">UPI &amp; Print</button>
-                  </div>
-                )}
-                {isDineIn && activeOrder && state !== 'paid' && (
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button disabled={busy} onClick={printBill} className="px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-sm font-medium"><Receipt size={15} className="inline" /> Print bill</button>
-                      <button disabled={busy} onClick={openSettle} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
+                      {isCounter && (
+                        <div className="grid grid-cols-2 gap-2">
+                          <button disabled={busy} onClick={() => counterCheckout('CASH_ON_DELIVERY')} className="btn-primary justify-center py-3 rounded-xl">Cash &amp; Print</button>
+                          <button disabled={busy} onClick={() => counterCheckout('QR_UPI')} className="btn-primary justify-center py-3 rounded-xl">UPI &amp; Print</button>
+                        </div>
+                      )}
+                      {isDineIn && activeOrder && (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <button disabled={busy} onClick={printBill} className="px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-sm font-medium"><Receipt size={15} className="inline" /> Print bill</button>
+                            <button disabled={busy} onClick={openSettle} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button disabled={busy || committed.length === 0} onClick={openEdit} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Pencil size={14} className="inline" /> Edit items</button>
+                            <button disabled={busy} onClick={openMove} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><ArrowRightLeft size={14} className="inline" /> Move</button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button disabled={busy} onClick={toggleHold} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm">{activeOrder.isHeld ? <><Play size={14} className="inline" /> Resume</> : <><Pause size={14} className="inline" /> Hold</>}</button>
+                            <button disabled={busy} onClick={cancelOrder} className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm"><Trash2 size={14} className="inline" /> Cancel</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button disabled={busy || committed.length === 0} onClick={openEdit} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Pencil size={14} className="inline" /> Edit items</button>
-                      <button disabled={busy} onClick={openMove} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><ArrowRightLeft size={14} className="inline" /> Move</button>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button disabled={busy} onClick={toggleHold} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm">{activeOrder.isHeld ? <><Play size={14} className="inline" /> Resume</> : <><Pause size={14} className="inline" /> Hold</>}</button>
-                      <button disabled={busy} onClick={cancelOrder} className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm"><Trash2 size={14} className="inline" /> Cancel</button>
+
+                    {/* RIGHT: the menu */}
+                    <div className="card p-4">
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="relative flex-1">
+                          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search menu…" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg pl-9 pr-3 py-2" />
+                        </div>
+                        <button onClick={() => setOpenItem(o => ({ ...o, show: !o.show }))} className="text-xs font-medium px-3 py-2 rounded-lg border border-stone-200 text-stone-600 hover:bg-stone-50 whitespace-nowrap">+ Open Item</button>
+                      </div>
+                      {openItem.show && (
+                        <div className="flex items-center gap-2 mb-3 p-2 bg-stone-50 rounded-lg">
+                          <input value={openItem.name} onChange={e => setOpenItem(o => ({ ...o, name: e.target.value }))} placeholder="Item name" className="flex-1 text-sm bg-white border border-stone-200 rounded-lg px-3 py-1.5" />
+                          <input value={openItem.price} onChange={e => setOpenItem(o => ({ ...o, price: e.target.value }))} type="number" placeholder="₹" className="w-20 text-sm bg-white border border-stone-200 rounded-lg px-3 py-1.5" />
+                          <button
+                            onClick={() => { if (openItem.name && openItem.price) { addOpenItem(openItem.name.trim(), openItem.price); setOpenItem({ show: false, name: '', price: '' }) } }}
+                            className="btn-primary py-1.5 px-3 rounded-lg text-sm">Add</button>
+                        </div>
+                      )}
+                      <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+                        {filteredMenu.map(cat => (
+                          <div key={cat.id}>
+                            <div className="text-[11px] font-semibold text-stone-400 uppercase mb-1">{cat.name}</div>
+                            {cat.menuItems.map(item => (
+                              <button key={item.id} onClick={() => addPending(item, cat.name)} className="w-full flex items-center justify-between py-2 border-b border-stone-50 hover:bg-stone-50 rounded px-1 text-left">
+                                <span className="text-sm text-stone-700">{item.name}</span>
+                                <span className="flex items-center gap-2 text-sm text-stone-500">₹{parseFloat(item.price).toFixed(0)}<Plus size={14} className="text-brand-500" /></span>
+                              </button>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}

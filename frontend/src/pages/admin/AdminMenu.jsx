@@ -33,14 +33,63 @@ function EditItemModal({ item, onClose, onSave }) {
   )
 }
 
+function AddItemModal({ categories, onClose, onSave }) {
+  const [form, setForm] = useState({ name: '', price: '', categoryId: categories[0]?.id || '', isVeg: true, description: '' })
+  const save = () => {
+    if (!form.name || !form.price || !form.categoryId) { toast.error('Name, price and category are required'); return }
+    onSave({ ...form, price: parseFloat(form.price) })
+  }
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+        <h3 className="text-base font-semibold mb-4">Add menu item</h3>
+        <div className="space-y-3">
+          <div><label className="label">Name</label><input className="input" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} /></div>
+          <div><label className="label">Price (₹)</label><input className="input" type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))} /></div>
+          <div>
+            <label className="label">Category</label>
+            <select className="input" value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))}>
+              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label">Type</label>
+            <div className="flex gap-2">
+              <button onClick={() => setForm(p => ({ ...p, isVeg: true }))} className={`flex-1 py-2 rounded-lg border text-sm ${form.isVeg ? 'border-green-500 bg-green-50 text-green-700' : 'border-stone-200 text-stone-600'}`}>Veg</button>
+              <button onClick={() => setForm(p => ({ ...p, isVeg: false }))} className={`flex-1 py-2 rounded-lg border text-sm ${!form.isVeg ? 'border-red-500 bg-red-50 text-red-600' : 'border-stone-200 text-stone-600'}`}>Non-veg</button>
+            </div>
+          </div>
+          <div><label className="label">Description</label><input className="input" placeholder="Optional" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} /></div>
+        </div>
+        <div className="flex gap-3 mt-5">
+          <button onClick={save} className="btn-primary flex-1 justify-center">Add item</button>
+          <button onClick={onClose} className="btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function AdminMenu() {
   const [editingItem, setEditingItem] = useState(null)
+  const [adding, setAdding] = useState(false)
   const [search, setSearch] = useState('')
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
     queryKey: ['menu'],
     queryFn: () => menuApi.getMenu().then(r => r.data),
+  })
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ['categories'],
+    queryFn: () => menuApi.getCategories().then(r => r.data),
+  })
+
+  const { mutate: addItem } = useMutation({
+    mutationFn: (item) => menuApi.addItem({ ...item, isAvailable: true }),
+    onSuccess: () => { queryClient.invalidateQueries(['menu']); setAdding(false); toast.success('Item added') },
+    onError: (e) => toast.error(e.response?.data?.error || 'Failed to add item'),
   })
 
   const { mutate: toggleItem } = useMutation({
@@ -64,6 +113,9 @@ export default function AdminMenu() {
           onSave={(form) => updateItem({ id: editingItem.id, ...form })}
         />
       )}
+      {adding && (
+        <AddItemModal categories={categories} onClose={() => setAdding(false)} onSave={(item) => addItem(item)} />
+      )}
 
       <div className="flex items-center gap-3 mb-5">
         <div className="relative flex-1 max-w-md">
@@ -75,7 +127,7 @@ export default function AdminMenu() {
             className="w-full text-sm bg-white border border-stone-200 rounded-xl pl-9 pr-3 py-2"
           />
         </div>
-        <button className="btn-primary text-sm whitespace-nowrap">
+        <button onClick={() => setAdding(true)} className="btn-primary text-sm whitespace-nowrap">
           <Plus size={15} /> Add menu item
         </button>
       </div>
