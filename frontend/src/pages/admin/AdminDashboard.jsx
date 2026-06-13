@@ -36,9 +36,9 @@ export default function AdminDashboard() {
     refetchInterval: 15000,
   })
 
-  const today = new Date().toDateString()
   const todayOrders = orders.filter(o => isTodayIST(o.createdAt))
-  const todayRevenue = todayOrders.filter(o => o.paymentStatus === 'paid').reduce((s, o) => s + parseFloat(o.total), 0)
+  // Revenue counts only fulfilled orders: paid and not cancelled.
+  const todayRevenue = todayOrders.filter(o => o.paymentStatus === 'paid' && o.status !== 'cancelled').reduce((s, o) => s + parseFloat(o.total), 0)
   const pendingConfirm = orders.filter(o => o.status === 'payment_received').length
   const totalCustomers = new Set(orders.map(o => o.userId)).size
 

@@ -161,6 +161,11 @@ function OrderCard({ order, refetch, now }) {
               <span className="text-stone-400">Deliver to: </span>{meta.address}
             </div>
           )}
+          {meta.type === 'TAKEAWAY' && order.pickupAt && (
+            <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-700 font-medium">
+              <span className="text-amber-500">Pickup at: </span>{formatIST(order.pickupAt, 'dd MMM, h:mm a')}
+            </div>
+          )}
 
           {/* Payment info */}
           <div className="bg-stone-50 rounded-xl p-3 text-xs text-stone-500 flex justify-between">
@@ -256,7 +261,9 @@ export default function AdminOrders() {
       .channel('admin-new-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Order' }, (payload) => {
         const row = payload.new
-        if (row.tableLabel || row.orderType === 'TAKEAWAY') return  // POS order — printed elsewhere
+        // Only auto-print fresh customer orders. POS orders are created already
+        // 'preparing' (or with a table) and print on the POS device.
+        if (row.tableLabel || !['payment_received', 'pending'].includes(row.status)) return
         if (printedRef.current.has(row.id)) return
         printedRef.current.add(row.id)
         // Items are inserted just after the order row — wait briefly, then fetch + print.
@@ -272,9 +279,9 @@ export default function AdminOrders() {
     return () => supabase.removeChannel(channel)
   }, [refetch])
 
-  // POS floor/counter orders (tables + take-away) are managed in the Dine-in page.
-  // Customer "dine-in" (no tableLabel) still belongs here.
-  const onlineOrders = orders.filter(o => !o.tableLabel && getOrderMeta(o).type !== 'TAKEAWAY')
+  // Show customer (online) orders here — delivery + takeaway. POS counter orders
+  // are created by the walk-in sentinel user and managed in the Dine-in page.
+  const onlineOrders = orders.filter(o => !o.tableLabel && o.user?.phone !== '0000000000')
   const filtered = filter ? onlineOrders.filter(o => o.status === filter) : onlineOrders
   const pendingCount = onlineOrders.filter(o => o.status === 'payment_received').length
 

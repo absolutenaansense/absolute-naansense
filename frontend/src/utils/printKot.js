@@ -89,6 +89,7 @@ export function printTicket(order, opts = {}) {
     ${meta.name ? `<div>Name: ${esc(meta.name)}</div>` : ''}
     ${(meta.phone || (order.user?.phone && order.user.phone !== '0000000000')) ? `<div>Phone: ${esc(meta.phone || order.user.phone)}</div>` : ''}
     ${!isDineIn && meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
+    ${isTakeaway && order.pickupAt ? `<div>Pickup: ${esc(formatIST(order.pickupAt, 'dd/MM HH:mm'))}</div>` : ''}
     <div class="hr"></div>
     <table>
       <thead><tr><th>Item</th>${showPrices ? '<th class="pr">Amt</th>' : ''}<th class="qty">Qty</th></tr></thead>

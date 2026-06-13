@@ -4,9 +4,10 @@ import { useAuthStore } from '../../store/authStore'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { formatIST } from '../../utils/dateIST'
 import { etaInfo } from '../../utils/eta'
-import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, Timer } from 'lucide-react'
+import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, Timer, Receipt } from 'lucide-react'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import PayAheadQR from '../../components/customer/PayAheadQR'
+import { printBill } from '../../utils/printKot'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 
@@ -69,9 +70,12 @@ function OrderCard({ order }) {
           {order.items?.length > 2 && ` +${order.items.length - 2} more`}
         </div>
         <div className="flex items-center justify-between border-t border-stone-50 pt-3">
-          <span className="text-xs text-stone-500">{order.paymentMethod === 'QR_UPI' ? 'UPI · Prepaid' : 'Cash on delivery'}</span>
+          <span className="text-xs text-stone-500">{order.orderType === 'TAKEAWAY' ? 'Takeaway · Cash' : order.paymentMethod === 'QR_UPI' ? 'UPI · Prepaid' : 'Cash on delivery'}</span>
           <div className="flex items-center gap-3">
             <span className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
+            <button onClick={() => printBill(order)} className="text-stone-500 text-xs flex items-center gap-0.5 hover:text-stone-800">
+              <Receipt size={13} /> Bill
+            </button>
             {isActive && (
               <button onClick={() => setExpanded(e => !e)} className="text-brand-500 text-xs flex items-center gap-0.5">
                 Track {expanded ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}

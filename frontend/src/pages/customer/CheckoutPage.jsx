@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle, MessageCircle } from 'lucide-react'
+import { MapPin, Truck, ShoppingBag, QrCode, Banknote, Check, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
@@ -43,6 +43,7 @@ function StepBar({ current }) {
 export default function CheckoutPage() {
   const [step, setStep] = useState(0)
   const [orderType, setOrderType] = useState('DELIVERY')
+  const [pickupTime, setPickupTime] = useState('')   // datetime-local string for takeaway
   const [selectedAddressId, setSelectedAddressId] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('CASH_ON_DELIVERY')
   const [newAddress, setNewAddress] = useState({ label: 'Home', line1: '', line2: '', city: '', pincode: '' })
@@ -63,9 +64,15 @@ export default function CheckoutPage() {
   const { items, addItem, removeItem, deleteItem, setItemNote, clearCart, getTotal, getOrderItems } = useCartStore()
 
   const subtotal = getTotal()
+  // No delivery charge on take-away orders.
   const deliveryFee = orderType === 'DELIVERY' && subtotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0
   const gst = Math.round(subtotal * GST_RATE)
   const total = subtotal + deliveryFee + gst
+
+  // Pickup must be at least 30 minutes out (preparation time).
+  const pad2 = n => String(n).padStart(2, '0')
+  const toLocalInput = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
+  const minPickup = toLocalInput(new Date(Date.now() + 30 * 60000))
 
   const { data: addresses = [], refetch: refetchProfile } = useQuery({
     queryKey: ['addresses', user?.id],
@@ -101,11 +108,25 @@ export default function CheckoutPage() {
     }
   }
 
+  const pickupValid = () => {
+    if (orderType !== 'TAKEAWAY') return true
+    if (!pickupTime) { toast.error('Please choose a pickup time'); return false }
+    if (new Date(pickupTime).getTime() < Date.now() + 30 * 60000 - 60000) { toast.error('Pickup time must be at least 30 minutes from now'); return false }
+    return true
+  }
+
+  const goToPayment = () => {
+    if (orderType === 'DELIVERY' && !selectedAddressId) { toast.error('Please select a delivery address'); return }
+    if (!pickupValid()) return
+    setStep(1)
+  }
+
   const handlePlaceOrder = async () => {
     if (orderType === 'DELIVERY' && !selectedAddressId) {
       toast.error('Please select a delivery address')
       return
     }
+    if (!pickupValid()) return
     setConfirming(true)
     try {
       const orderItems = getOrderItems()
@@ -113,6 +134,7 @@ export default function CheckoutPage() {
       const addressText = selectedAddress
         ? `${selectedAddress.line1}${selectedAddress.line2 ? ', ' + selectedAddress.line2 : ''}, ${selectedAddress.city} - ${selectedAddress.pincode}`
         : null
+      const pickupAt = orderType === 'TAKEAWAY' && pickupTime ? new Date(pickupTime).toISOString() : null
       const { data } = await ordersApi.createOrder({
         userId: user.id,
         items: orderItems,
@@ -120,10 +142,12 @@ export default function CheckoutPage() {
         total,
         orderType,
         deliveryAddress: addressText,
+        pickupAt,
       })
       // Snapshot the order for the WhatsApp image (cart is cleared right after).
       setPlacedSnapshot({
         ref: data.id, name: user?.name || null, phone: user?.phone || null, address: addressText,
+        orderType, pickupAt,
         items: Object.values(items).map(({ item, quantity, note }) => ({ name: item.name, price: parseFloat(item.price), quantity, note: note || '' })),
         subtotal, gst, deliveryFee, total,
         dateStr: formatIST(new Date().toISOString(), 'dd/MM/yy HH:mm'),
@@ -251,7 +275,7 @@ export default function CheckoutPage() {
             <div className="grid grid-cols-2 gap-3">
               {[
                 { value: 'DELIVERY', icon: Truck, label: 'Delivery' },
-                { value: 'DINE_IN', icon: UtensilsCrossed, label: 'Dine-in' },
+                { value: 'TAKEAWAY', icon: ShoppingBag, label: 'Takeaway' },
               ].map(({ value, icon: Icon, label }) => (
                 <button
                   key={value}
@@ -340,14 +364,21 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {orderType === 'DINE_IN' && (
-            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
-              <MapPin size={15} className="inline mr-1" />
-              For dine-in, your order will be prepared when you arrive. You can book a table under "Reservations".
+          {orderType === 'TAKEAWAY' && (
+            <div className="card p-4">
+              <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Pickup time</div>
+              <input
+                type="datetime-local"
+                value={pickupTime}
+                min={minPickup}
+                onChange={e => setPickupTime(e.target.value)}
+                className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5"
+              />
+              <div className="text-xs text-stone-400 mt-2">Choose a time at least 30 minutes from now so we can prepare your order. No delivery charge on takeaway.</div>
             </div>
           )}
 
-          <button onClick={() => setStep(1)} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
+          <button onClick={goToPayment} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
             Continue to payment <ChevronRight size={16} />
           </button>
         </div>
@@ -499,10 +530,16 @@ export default function CheckoutPage() {
               <div className="card p-5 text-center">
                 <CheckCircle2 size={44} className="text-green-500 mx-auto mb-3" />
                 <h3 className="text-base font-semibold text-stone-900 mb-1">Order placed!</h3>
-                <p className="text-sm text-stone-500">Pay ₹{paidTotal.toFixed(0)} cash when your order arrives.</p>
+                <p className="text-sm text-stone-500">
+                  {placedSnapshot?.orderType === 'TAKEAWAY' ? `Pay ₹${paidTotal.toFixed(0)} cash at pickup.` : `Pay ₹${paidTotal.toFixed(0)} cash when your order arrives.`}
+                </p>
+                {placedSnapshot?.orderType === 'TAKEAWAY' && placedSnapshot?.pickupAt && (
+                  <div className="mt-2 text-sm font-semibold text-brand-600">Pickup at {formatIST(placedSnapshot.pickupAt, 'dd MMM, h:mm a')}</div>
+                )}
                 <div className="mt-4 bg-amber-50 rounded-xl p-3 text-xs text-amber-700">
                   Waiting for restaurant to confirm your order…
                 </div>
+                <div className="mt-2 text-[11px] text-stone-400">Note: once placed, an order cannot be cancelled or refunded.</div>
               </div>
 
               {/* Prominent WhatsApp send */}
@@ -515,7 +552,7 @@ export default function CheckoutPage() {
               {placedSnapshot && (
                 <div className="card p-4">
                   <div className="text-xs font-semibold text-stone-400 uppercase mb-1">Order details</div>
-                  <div className="text-xs text-stone-400 mb-2">{placedSnapshot.dateStr} · Cash on delivery</div>
+                  <div className="text-xs text-stone-400 mb-2">{placedSnapshot.dateStr} · {placedSnapshot.orderType === 'TAKEAWAY' ? 'Takeaway' : 'Delivery'} · Cash</div>
                   <div className="space-y-1.5">
                     {placedSnapshot.items.map((it, i) => (
                       <div key={i} className="text-sm">
@@ -530,6 +567,7 @@ export default function CheckoutPage() {
                     <div className="flex justify-between text-stone-500"><span>GST (5%)</span><span>₹{placedSnapshot.gst}</span></div>
                     <div className="flex justify-between font-semibold text-stone-900 pt-1"><span>Total</span><span>₹{placedSnapshot.total.toFixed(0)}</span></div>
                   </div>
+                  {placedSnapshot.orderType === 'TAKEAWAY' && placedSnapshot.pickupAt && <div className="mt-3 text-xs text-stone-500"><span className="text-stone-400">Pickup at: </span>{formatIST(placedSnapshot.pickupAt, 'dd MMM, h:mm a')}</div>}
                   {placedSnapshot.address && <div className="mt-3 text-xs text-stone-500"><span className="text-stone-400">Deliver to: </span>{placedSnapshot.address}</div>}
                   {(placedSnapshot.name || placedSnapshot.phone) && <div className="text-xs text-stone-500 mt-0.5">{placedSnapshot.name}{placedSnapshot.phone ? ` · ${placedSnapshot.phone}` : ''}</div>}
                 </div>
