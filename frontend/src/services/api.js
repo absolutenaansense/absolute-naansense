@@ -209,6 +209,10 @@ export const ordersApi = {
     const { data: cur } = await supabase.from('Order').select('billNo').eq('id', id).single()
     let billNo = cur?.billNo
     if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no'); billNo = bn }
+    // Assign a daily KOT number to this order's items (so it prints + lists like a KOT).
+    const { data: kot } = await supabase.rpc('next_kot_no')
+    const kotNo = kot
+    await supabase.from('OrderItem').update({ kotNo }).eq('orderId', id).is('kotNo', null)
     const { data, error } = await supabase
       .from('Order')
       .update({ status: 'confirmed', paymentStatus: 'paid', billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
@@ -220,7 +224,7 @@ export const ordersApi = {
     if (data?.userId) {
       await supabase.from('User').update({ isReturning: true }).eq('id', data.userId)
     }
-    return { data }
+    return { data, kotNo }
   },
 
   cancelOrder: async (id) => {
@@ -297,6 +301,19 @@ export const reservationsApi = {
       .single()
     if (error) throw { response: { data: { error: error.message } } }
     return { data }
+  },
+}
+
+// --- Customers ---
+export const customersApi = {
+  list: async () => {
+    const { data, error } = await supabase
+      .from('User')
+      .select('id, name, phone, email, isReturning, createdAt, orders:Order(count)')
+      .neq('phone', '0000000000')   // exclude the walk-in sentinel
+      .order('createdAt', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: data || [] }
   },
 }
 

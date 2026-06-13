@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer } from 'lucide-react'
+import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
 import { etaInfo } from '../../utils/eta'
 import { getOrderMeta, itemNote } from '../../utils/orderNotes'
-import { printKot } from '../../utils/printKot'
+import { printTicket, printBill } from '../../utils/printKot'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ordersApi } from '../../services/api'
 
@@ -58,12 +58,14 @@ function OrderCard({ order, refetch, now }) {
   const gst = Math.round(subtotal * 0.05)
   const delivery = Math.max(0, Math.round(parseFloat(order.total) - subtotal - gst))
 
+  const orderKot = (o, kotNo) => printTicket({ ...o, kotNo: kotNo ?? o.items?.[0]?.kotNo }, { title: 'KOT', showPrices: false })
+
   const handleConfirm = async () => {
     setLoading(true)
     try {
-      await ordersApi.confirmOrder(order.id)
-      printKot(order)                                  // print KOT to connected printer
-      await ordersApi.updateStatus(order.id, 'preparing') // confirm => preparing
+      const { kotNo } = await ordersApi.confirmOrder(order.id)
+      orderKot(order, kotNo)                               // print clean KOT to connected printer
+      await ordersApi.updateStatus(order.id, 'preparing')  // confirm => preparing
       toast.success('Confirmed — KOT sent to printer')
       refetch()
     } catch { toast.error('Failed to confirm') }
@@ -193,13 +195,21 @@ function OrderCard({ order, refetch, now }) {
                 Mark as {statusLabel(nextStatus)}
               </button>
             )}
-            {['confirmed', 'preparing', 'out_for_delivery'].includes(order.status) && (
-              <button
-                onClick={() => printKot(order)}
-                className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm font-medium flex items-center gap-1.5"
-              >
-                <Printer size={15} /> KOT
-              </button>
+            {['confirmed', 'preparing', 'out_for_delivery', 'delivered'].includes(order.status) && (
+              <>
+                <button
+                  onClick={() => orderKot(order)}
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm font-medium flex items-center gap-1.5"
+                >
+                  <Printer size={15} /> KOT
+                </button>
+                <button
+                  onClick={() => printBill(order)}
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm font-medium flex items-center gap-1.5"
+                >
+                  <Receipt size={15} /> Bill
+                </button>
+              </>
             )}
             {['confirmed', 'preparing', 'out_for_delivery'].includes(order.status) && (
               <button

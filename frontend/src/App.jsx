@@ -16,6 +16,7 @@ import AdminOrders from './pages/admin/AdminOrders'
 import AdminDineIn from './pages/admin/AdminDineIn'
 import AdminReservations from './pages/admin/AdminReservations'
 import AdminReports from './pages/admin/AdminReports'
+import AdminCustomers from './pages/admin/AdminCustomers'
 import AdminMenu from './pages/admin/AdminMenu'
 import AdminSettings from './pages/admin/AdminSettings'
 
@@ -47,6 +48,7 @@ export default function App() {
       <Route path="/admin/dine-in" element={<AdminRoute><AdminDineIn /></AdminRoute>} />
       <Route path="/admin/reservations" element={<AdminRoute><AdminReservations /></AdminRoute>} />
       <Route path="/admin/reports" element={<AdminRoute><AdminReports /></AdminRoute>} />
+      <Route path="/admin/customers" element={<AdminRoute><AdminCustomers /></AdminRoute>} />
       <Route path="/admin/menu" element={<AdminRoute><AdminMenu /></AdminRoute>} />
       <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
 

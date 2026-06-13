@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingBag, Calendar, UtensilsCrossed,
-  Settings, LogOut, Bell, Armchair, BarChart3, ExternalLink
+  Settings, LogOut, Bell, Armchair, BarChart3, ExternalLink, Users
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import KotManager from './KotManager'
@@ -12,6 +12,7 @@ const navItems = [
   { to: '/admin/dine-in', icon: Armchair, label: 'Dine-in' },
   { to: '/admin/reservations', icon: Calendar, label: 'Reservations' },
   { to: '/admin/reports', icon: BarChart3, label: 'Reports' },
+  { to: '/admin/customers', icon: Users, label: 'Customers' },
   { to: '/admin/menu', icon: UtensilsCrossed, label: 'Menu' },
   { to: '/admin/settings', icon: Settings, label: 'Settings' },
 ]
