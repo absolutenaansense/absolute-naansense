@@ -358,7 +358,8 @@ export const dineApi = {
     if (existing) return existing.id
     const { data, error } = await supabase
       .from('User')
-      .insert([{ name: 'Walk-in', phone: WALKIN_PHONE, isVerified: true, isReturning: true }])
+      // passwordHash is NOT NULL; this sentinel never logs in, so a placeholder is fine.
+      .insert([{ name: 'Walk-in', phone: WALKIN_PHONE, passwordHash: 'walkin-no-login', isVerified: true, isReturning: true }])
       .select('id')
       .single()
     if (error) throw { response: { data: { error: error.message } } }
