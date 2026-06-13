@@ -7,6 +7,7 @@ import { reportsApi, dineApi, ordersApi } from '../../services/api'
 import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
+import { printBill } from '../../utils/printKot'
 
 const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
@@ -192,6 +193,7 @@ export default function AdminReports() {
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1">
                       <button onClick={() => setViewOrder(r)} title="View" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Eye size={14} /></button>
+                      <button onClick={() => printBill(r)} title="Print" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Printer size={14} /></button>
                       <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>
                       <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
                     </div>
