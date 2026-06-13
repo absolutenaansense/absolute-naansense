@@ -162,12 +162,15 @@ export const ordersApi = {
       .single()
     if (orderError) throw { response: { data: { error: orderError.message } } }
 
+    // Assign a daily KOT number at placement so the auto-printed KOT is numbered.
+    const { data: kotNo } = await supabase.rpc('next_kot_no')
     const orderItems = items.map(item => ({
       orderId: order.id,
       menuItemId: item.menuItemId,
       quantity: item.quantity,
       price: item.price,
       specialRequest: item.note || null,
+      kotNo,
     }))
     const { error: itemsError } = await supabase.from('OrderItem').insert(orderItems)
     if (itemsError) throw { response: { data: { error: itemsError.message } } }
@@ -188,7 +191,7 @@ export const ordersApi = {
   getOrder: async (id) => {
     const { data, error } = await supabase
       .from('Order')
-      .select('*, items:OrderItem(*, menuItem:MenuItem(name, price)), user:User(name, phone)')
+      .select('*, items:OrderItem(*, menuItem:MenuItem(name, price, category:Category(name))), user:User(name, phone)')
       .eq('id', id)
       .single()
     if (error) throw { response: { data: { error: error.message } } }
@@ -209,10 +212,6 @@ export const ordersApi = {
     const { data: cur } = await supabase.from('Order').select('billNo').eq('id', id).single()
     let billNo = cur?.billNo
     if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no'); billNo = bn }
-    // Assign a daily KOT number to this order's items (so it prints + lists like a KOT).
-    const { data: kot } = await supabase.rpc('next_kot_no')
-    const kotNo = kot
-    await supabase.from('OrderItem').update({ kotNo }).eq('orderId', id).is('kotNo', null)
     const { data, error } = await supabase
       .from('Order')
       .update({ status: 'confirmed', paymentStatus: 'paid', billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
@@ -224,7 +223,7 @@ export const ordersApi = {
     if (data?.userId) {
       await supabase.from('User').update({ isReturning: true }).eq('id', data.userId)
     }
-    return { data, kotNo }
+    return { data }
   },
 
   cancelOrder: async (id) => {

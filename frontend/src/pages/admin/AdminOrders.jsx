@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '../../services/supabase'
 import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer, Receipt } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
@@ -58,15 +59,15 @@ function OrderCard({ order, refetch, now }) {
   const gst = Math.round(subtotal * 0.05)
   const delivery = Math.max(0, Math.round(parseFloat(order.total) - subtotal - gst))
 
-  const orderKot = (o, kotNo) => printTicket({ ...o, kotNo: kotNo ?? o.items?.[0]?.kotNo }, { title: 'KOT', showPrices: false })
+  const orderKot = (o) => printTicket({ ...o, kotNo: o.items?.[0]?.kotNo }, { title: 'KOT', showPrices: false })
 
   const handleConfirm = async () => {
     setLoading(true)
     try {
-      const { kotNo } = await ordersApi.confirmOrder(order.id)
-      orderKot(order, kotNo)                               // print clean KOT to connected printer
-      await ordersApi.updateStatus(order.id, 'preparing')  // confirm => preparing
-      toast.success('Confirmed — KOT sent to printer')
+      // KOT already auto-printed when the order arrived; confirm just advances it.
+      await ordersApi.confirmOrder(order.id)
+      await ordersApi.updateStatus(order.id, 'preparing')
+      toast.success('Order confirmed')
       refetch()
     } catch { toast.error('Failed to confirm') }
     finally { setLoading(false) }
@@ -175,7 +176,7 @@ function OrderCard({ order, refetch, now }) {
                   disabled={loading}
                   className="flex-1 btn-primary justify-center py-2.5 rounded-xl"
                 >
-                  <Check size={15} /> Confirm &amp; print KOT
+                  <Check size={15} /> Confirm order
                 </button>
                 <button
                   onClick={handleCancel}
@@ -230,6 +231,7 @@ function OrderCard({ order, refetch, now }) {
 export default function AdminOrders() {
   const [filter, setFilter] = useState('')
   const [now, setNow] = useState(Date.now())
+  const printedRef = useRef(new Set())
   const queryClient = useQueryClient()
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
@@ -239,6 +241,29 @@ export default function AdminOrders() {
     queryFn: () => ordersApi.allOrders().then(r => r.data),
     refetchInterval: 15000, // auto-refresh every 15 seconds
   })
+
+  // Auto-print the KOT when a new ONLINE order lands (keep this screen open at the counter).
+  // POS dine-in/take-away orders print their KOT on the POS device, so they're skipped here.
+  useEffect(() => {
+    const channel = supabase
+      .channel('admin-new-orders')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Order' }, (payload) => {
+        const row = payload.new
+        if (row.tableLabel || row.orderType === 'TAKEAWAY') return  // POS order — printed elsewhere
+        if (printedRef.current.has(row.id)) return
+        printedRef.current.add(row.id)
+        // Items are inserted just after the order row — wait briefly, then fetch + print.
+        setTimeout(async () => {
+          try {
+            const { data } = await ordersApi.getOrder(row.id)
+            if (data?.items?.length) printTicket({ ...data, kotNo: data.items[0]?.kotNo }, { title: 'KOT', showPrices: false })
+          } catch { /* ignore */ }
+          refetch()
+        }, 1800)
+      })
+      .subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [refetch])
 
   // POS floor/counter orders (tables + take-away) are managed in the Dine-in page.
   // Customer "dine-in" (no tableLabel) still belongs here.
