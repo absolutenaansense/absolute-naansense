@@ -1,12 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, RefreshCw, Receipt } from 'lucide-react'
+import { Download, RefreshCw, Receipt, Eye, Printer, Pencil, Trash2, X, Minus, Plus } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
-import { reportsApi } from '../../services/api'
+import { reportsApi, dineApi, ordersApi } from '../../services/api'
 import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
 import { printBill } from '../../utils/printKot'
+
+const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
 const CGST_RATE = 0.025, SGST_RATE = 0.025
 const istDay = (d) => formatIST(d, 'yyyy-MM-dd')
@@ -25,6 +27,11 @@ export default function AdminReports() {
   const [to, setTo] = useState(todayIST())
   const [billNo, setBillNo] = useState('')
 
+  const [viewOrder, setViewOrder] = useState(null)
+  const [editOrder, setEditOrder] = useState(null)
+  const [draft, setDraft] = useState([])
+  const [busy, setBusy] = useState(false)
+
   const viewBill = async () => {
     if (!billNo) return
     try {
@@ -32,6 +39,25 @@ export default function AdminReports() {
       if (!data) { toast.error(`No bill #${billNo}`); return }
       printBill(data)
     } catch { toast.error('Lookup failed') }
+  }
+
+  const startEdit = (r) => { setEditOrder(r); setDraft(r.items.map(it => ({ id: it.id, quantity: it.quantity, it }))) }
+  const dQty = (id, d) => setDraft(arr => arr.map(x => x.id === id ? { ...x, quantity: Math.max(1, x.quantity + d) } : x))
+  const dRemove = (id) => setDraft(arr => arr.filter(x => x.id !== id))
+  const saveEdit = async () => {
+    setBusy(true)
+    try {
+      const keptIds = draft.map(x => x.id)
+      const removeIds = editOrder.items.map(i => i.id).filter(id => !keptIds.includes(id))
+      const updates = draft.filter(x => { const o = editOrder.items.find(i => i.id === x.id); return o && o.quantity !== x.quantity }).map(x => ({ id: x.id, quantity: x.quantity }))
+      await dineApi.updateOrderItems({ orderId: editOrder.id, updates, removeIds })
+      toast.success('Bill modified'); setEditOrder(null); await refetch()
+    } catch { toast.error('Failed to modify') } finally { setBusy(false) }
+  }
+  const cancelBill = async (r) => {
+    if (!confirm(`Cancel bill ${r.billNo ?? ''}? This marks the order cancelled.`)) return
+    try { await ordersApi.cancelOrder(r.id); toast.success('Bill cancelled'); await refetch() }
+    catch { toast.error('Failed to cancel') }
   }
 
   const { data: orders = [], isLoading, refetch } = useQuery({
@@ -141,16 +167,16 @@ export default function AdminReports() {
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-stone-500 text-xs">
               <tr>
-                {['Bill No', 'Date', 'Type', 'Payment', 'Status', 'Sub Total', 'CGST', 'SGST', 'Total'].map(h => (
+                {['Bill No', 'Date', 'Type', 'Payment', 'Status', 'Sub Total', 'CGST', 'SGST', 'Total', 'Actions'].map(h => (
                   <th key={h} className="text-left font-medium px-3 py-2 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
-                <tr><td colSpan={9} className="text-center py-8 text-stone-400">Loading…</td></tr>
+                <tr><td colSpan={10} className="text-center py-8 text-stone-400">Loading…</td></tr>
               ) : sales.length === 0 ? (
-                <tr><td colSpan={9} className="text-center py-8 text-stone-400">No sales in this period</td></tr>
+                <tr><td colSpan={10} className="text-center py-8 text-stone-400">No sales in this period</td></tr>
               ) : sales.map(r => (
                 <tr key={r.id} className="border-t border-stone-50">
                   <td className="px-3 py-2 font-mono">{r.billNo ?? '—'}</td>
@@ -162,6 +188,14 @@ export default function AdminReports() {
                   <td className="px-3 py-2">₹{r.cgst.toFixed(2)}</td>
                   <td className="px-3 py-2">₹{r.sgst.toFixed(2)}</td>
                   <td className="px-3 py-2 font-semibold">₹{r.grand.toFixed(2)}</td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setViewOrder(r)} title="View" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Eye size={14} /></button>
+                      <button onClick={() => printBill(r)} title="Print" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Printer size={14} /></button>
+                      <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>
+                      <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -173,6 +207,7 @@ export default function AdminReports() {
                   <td className="px-3 py-2">₹{tot.cgst.toFixed(2)}</td>
                   <td className="px-3 py-2">₹{tot.sgst.toFixed(2)}</td>
                   <td className="px-3 py-2">₹{tot.grand.toFixed(2)}</td>
+                  <td></td>
                 </tr>
               </tfoot>
             )}
@@ -204,6 +239,64 @@ export default function AdminReports() {
           </div>
         </div>
       </div>
+
+      {/* View bill modal */}
+      {viewOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setViewOrder(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
+              <span className="font-semibold text-stone-900">Bill #{viewOrder.billNo ?? '—'} · {typeLabel(viewOrder.meta)}</span>
+              <button onClick={() => setViewOrder(null)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-1.5 text-sm max-h-[60vh] overflow-y-auto">
+              <div className="text-xs text-stone-400">{formatIST(viewOrder.createdAt, 'dd MMM yyyy, h:mm a')} · {payLabel(viewOrder)} · {viewOrder.paymentStatus}</div>
+              {(viewOrder.items || []).map(it => (
+                <div key={it.id} className="flex justify-between"><span className="text-stone-700">{nameOf(it)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
+              ))}
+              <div className="border-t border-stone-100 pt-2 mt-1 space-y-1">
+                <div className="flex justify-between text-stone-500"><span>Sub Total</span><span>₹{viewOrder.subtotal.toFixed(2)}</span></div>
+                <div className="flex justify-between text-stone-500"><span>CGST 2.5%</span><span>₹{viewOrder.cgst.toFixed(2)}</span></div>
+                <div className="flex justify-between text-stone-500"><span>SGST 2.5%</span><span>₹{viewOrder.sgst.toFixed(2)}</span></div>
+                <div className="flex justify-between font-semibold"><span>Total</span><span>₹{viewOrder.grand.toFixed(2)}</span></div>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-100">
+              <button onClick={() => setViewOrder(null)} className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-sm">Close</button>
+              <button onClick={() => printBill(viewOrder)} className="btn-primary px-4 py-2 rounded-xl text-sm"><Printer size={14} /> Print</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modify bill modal */}
+      {editOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setEditOrder(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
+              <span className="font-semibold text-stone-900">Modify bill #{editOrder.billNo ?? '—'}</span>
+              <button onClick={() => setEditOrder(null)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-2 max-h-[60vh] overflow-y-auto">
+              {draft.length === 0 && <div className="text-sm text-stone-400 text-center py-4">No items left</div>}
+              {draft.map(x => (
+                <div key={x.id} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="flex-1 truncate text-stone-700">{nameOf(x.it)}</span>
+                  <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
+                    <button onClick={() => dQty(x.id, -1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Minus size={13} /></button>
+                    <span className="w-5 text-center">{x.quantity}</span>
+                    <button onClick={() => dQty(x.id, 1)} className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-stone-200"><Plus size={13} /></button>
+                  </div>
+                  <button onClick={() => dRemove(x.id)} className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-400 hover:text-red-500"><X size={14} /></button>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-100">
+              <button onClick={() => setEditOrder(null)} className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-sm">Cancel</button>
+              <button disabled={busy || draft.length === 0} onClick={saveEdit} className="btn-primary px-4 py-2 rounded-xl text-sm">Save changes</button>
+            </div>
+          </div>
+        </div>
+      )}
     </AdminLayout>
   )
 }

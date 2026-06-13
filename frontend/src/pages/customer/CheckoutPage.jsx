@@ -13,7 +13,7 @@ import { addressApi, ordersApi } from '../../services/api'
 const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
 const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
 const GST_RATE = 0.05 // 5% GST applied to every order's subtotal
-const UPI_ENABLED = true // UPI online payment available as an option (alongside COD)
+const UPI_ENABLED = false // UPI disabled in online ordering — COD only
 
 const steps = ['Delivery', 'Payment', 'Confirm']
 

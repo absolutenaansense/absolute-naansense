@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer } from 'lucide-react'
+import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
+import { etaInfo } from '../../utils/eta'
 import { getOrderMeta, itemNote } from '../../utils/orderNotes'
 import { printKot } from '../../utils/printKot'
 import AdminLayout from '../../components/admin/AdminLayout'
@@ -44,10 +45,13 @@ const statusLabel = (s) => ({
   cancelled: 'Cancelled',
 }[s] || s)
 
-function OrderCard({ order, refetch }) {
+function OrderCard({ order, refetch, now }) {
   const [expanded, setExpanded] = useState(order.status === 'payment_received')
   const [loading, setLoading] = useState(false)
   const nextStatus = STATUS_NEXT[order.status]
+
+  const active = !['delivered', 'cancelled', 'payment_received', 'pending'].includes(order.status)
+  const eta = active ? etaInfo(order.confirmedAt, now) : null
 
   const meta = getOrderMeta(order)
   const subtotal = (order.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
@@ -103,6 +107,11 @@ function OrderCard({ order, refetch }) {
             {order.status === 'payment_received' && (
               <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">
                 Action needed
+              </span>
+            )}
+            {eta && (
+              <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${eta.overdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                <Timer size={11} /> ETA {eta.label}
               </span>
             )}
           </div>
@@ -210,7 +219,10 @@ function OrderCard({ order, refetch }) {
 
 export default function AdminOrders() {
   const [filter, setFilter] = useState('')
+  const [now, setNow] = useState(Date.now())
   const queryClient = useQueryClient()
+
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
 
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-orders'],
@@ -265,7 +277,7 @@ export default function AdminOrders() {
         <div className="text-center py-16 text-stone-400">No orders found.</div>
       ) : (
         filtered.map(order => (
-          <OrderCard key={order.id} order={order} refetch={refetch} />
+          <OrderCard key={order.id} order={order} refetch={refetch} now={now} />
         ))
       )}
     </AdminLayout>

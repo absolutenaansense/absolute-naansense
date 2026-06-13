@@ -211,7 +211,7 @@ export const ordersApi = {
     if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no'); billNo = bn }
     const { data, error } = await supabase
       .from('Order')
-      .update({ status: 'confirmed', paymentStatus: 'paid', billNo, updatedAt: new Date().toISOString() })
+      .update({ status: 'confirmed', paymentStatus: 'paid', billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()
@@ -307,7 +307,7 @@ export const reportsApi = {
     const since = new Date(Date.now() - 120 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('Order')
-      .select('id, billNo, orderType, tableLabel, customerName, paymentMethod, paymentStatus, status, total, createdAt, items:OrderItem(quantity, price)')
+      .select('id, billNo, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
       .gte('createdAt', since)
       .order('createdAt', { ascending: false })
     if (error) throw { response: { data: { error: error.message } } }

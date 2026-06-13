@@ -3,7 +3,8 @@ import { ordersApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { formatIST } from '../../utils/dateIST'
-import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp } from 'lucide-react'
+import { etaInfo } from '../../utils/eta'
+import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, Timer } from 'lucide-react'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import PayAheadQR from '../../components/customer/PayAheadQR'
 import { useState, useEffect } from 'react'
@@ -36,9 +37,13 @@ function OrderCard({ order }) {
     return () => supabase.removeChannel(channel)
   }, [order.id, order.status])
 
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
+
   const cfg = statusConfig[liveStatus] || statusConfig.pending
   const Icon = cfg.icon
   const isActive = !['delivered', 'cancelled'].includes(liveStatus)
+  const eta = (isActive && !['pending', 'payment_received'].includes(liveStatus)) ? etaInfo(order.confirmedAt, now) : null
 
   return (
     <div className="card mb-3 overflow-hidden">
@@ -48,9 +53,16 @@ function OrderCard({ order }) {
             <div className="font-mono text-sm font-semibold text-stone-700">#{order.id?.substring(0,8).toUpperCase()}</div>
             <div className="text-xs text-stone-400 mt-0.5">{formatIST(order.createdAt, 'dd MMM yyyy · h:mm a')}</div>
           </div>
-          <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.color}`}>
-            <Icon size={12} /> {cfg.label}
-          </span>
+          <div className="flex flex-col items-end gap-1">
+            <span className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${cfg.color}`}>
+              <Icon size={12} /> {cfg.label}
+            </span>
+            {eta && (
+              <span className={`flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${eta.overdue ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
+                <Timer size={11} /> {eta.overdue ? 'Arriving soon' : `ETA ${eta.label}`}
+              </span>
+            )}
+          </div>
         </div>
         <div className="text-sm text-stone-600 mb-3">
           {order.items?.slice(0, 2).map(i => `${i.menuItem?.name} × ${i.quantity}`).join(', ')}
