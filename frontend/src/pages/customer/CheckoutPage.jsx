@@ -628,10 +628,12 @@ export default function CheckoutPage() {
                 {placedSnapshot?.orderType === 'TAKEAWAY' && placedSnapshot?.pickupAt && (
                   <div className="mt-2 text-sm font-semibold text-brand-600">Pickup at {formatIST(placedSnapshot.pickupAt, 'dd MMM, h:mm a')}</div>
                 )}
-                <div className="mt-4 bg-amber-50 rounded-xl p-3 text-xs text-amber-700">
-                  Waiting for restaurant to confirm your order…
-                </div>
                 <div className="mt-2 text-[11px] text-stone-400">Note: once placed, an order cannot be cancelled or refunded.</div>
+              </div>
+
+              {/* Live status — auto-refreshes as the restaurant updates the order */}
+              <div className="card p-4">
+                <LiveOrderTracker orderId={placedOrder?.id} />
               </div>
 
               {/* Prominent WhatsApp send */}

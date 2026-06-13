@@ -16,11 +16,15 @@ export default function LiveOrderTracker({ orderId }) {
   const [status, setStatus] = useState('payment_received')
   const [loading, setLoading] = useState(true)
 
-  // Initial fetch
+  // Initial fetch + polling fallback (in case a realtime event is missed).
   useEffect(() => {
     if (!orderId) return
-    supabase.from('Order').select('status').eq('id', orderId).single()
-      .then(({ data }) => { if (data) setStatus(data.status); setLoading(false) })
+    let active = true
+    const fetchStatus = () => supabase.from('Order').select('status').eq('id', orderId).single()
+      .then(({ data }) => { if (active && data) { setStatus(data.status); setLoading(false) } })
+    fetchStatus()
+    const t = setInterval(fetchStatus, 10000)
+    return () => { active = false; clearInterval(t) }
   }, [orderId])
 
   // Real-time subscription
