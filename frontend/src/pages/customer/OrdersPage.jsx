@@ -83,6 +83,8 @@ export default function OrdersPage() {
     queryFn: () => ordersApi.myOrders(user?.id).then(r => r.data),
     enabled: !!user?.id,
     refetchInterval: 30000,
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
 
   return (

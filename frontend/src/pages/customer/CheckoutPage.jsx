@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { MapPin, Truck, UtensilsCrossed, QrCode, Banknote, Check, Plus, Minus, Trash2, ChevronRight, CheckCircle2, Clock, RefreshCw, XCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
@@ -51,6 +51,7 @@ export default function CheckoutPage() {
   const [liveStatus, setLiveStatus] = useState(null)
 
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { user } = useAuthStore()
   const { items, addItem, removeItem, deleteItem, clearCart, getTotal, getOrderItems } = useCartStore()
 
@@ -99,6 +100,7 @@ export default function CheckoutPage() {
       setPaidTotal(total)
       setOrderComplete(true)
       setStep(2)
+      queryClient.invalidateQueries({ queryKey: ['my-orders'] })
       clearCart()
       clearCart()
     } catch (err) {
