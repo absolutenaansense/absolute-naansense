@@ -24,6 +24,7 @@ export function getOrderMeta(order) {
     address: order?.deliveryAddress || n.address || null,
     name: order?.customerName || n.name || null,
     phone: order?.customerPhone || n.phone || null,
+    note: n.text || null,   // whole-order special request (plain-text notes)
     itemNotes: n.items || {},
   }
 }

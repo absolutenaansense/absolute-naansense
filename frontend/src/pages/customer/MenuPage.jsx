@@ -6,6 +6,7 @@ import { menuApi } from '../../services/api'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import CustomerLayout from '../../components/customer/CustomerLayout'
+import { formatIST } from '../../utils/dateIST'
 
 function VegDot({ isVeg }) {
   return (
@@ -64,6 +65,9 @@ export default function MenuPage() {
   const sectionRefs = useRef({})
   const goTo = (id) => { setActiveCat(id); sectionRefs.current[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }
   const { user } = useAuthStore()
+  const hourIST = parseInt(formatIST(new Date().toISOString(), 'H'), 10)
+  const greeting = hourIST < 12 ? 'Good morning' : hourIST < 17 ? 'Good afternoon' : 'Good evening'
+  const firstName = (user?.name || '').trim().split(' ')[0] || 'there'
   const cartCount = useCartStore(s => s.getCount())
   const cartTotal = useCartStore(s => s.getTotal())
   const navigate = useNavigate()
@@ -87,9 +91,9 @@ export default function MenuPage() {
       {/* Hero */}
       <div className="bg-brand-500 px-4 pt-5 pb-16">
         <div className="text-white/70 text-xs font-medium mb-1 uppercase tracking-wider">Renukoot</div>
-        <h2 className="text-white text-xl font-semibold">What would you like today?</h2>
+        <h2 className="text-white text-xl font-semibold">{greeting}, {firstName} 👋</h2>
         <p className="text-white/70 text-sm mt-1">
-          {user?.isReturning ? 'Welcome back! Your favourites are waiting.' : 'Free delivery within 5 km'}
+          {user?.isReturning ? 'Welcome back! Your favourites are waiting.' : 'What would you like today?'}
         </p>
       </div>
 

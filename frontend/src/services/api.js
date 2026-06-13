@@ -144,7 +144,7 @@ export const ordersApi = {
     return { data }
   },
 
-  createOrder: async ({ userId, items, paymentMethod, total, orderType, deliveryAddress, customerName, pickupAt }) => {
+  createOrder: async ({ userId, items, paymentMethod, total, orderType, deliveryAddress, customerName, pickupAt, notes }) => {
     // COD orders need no payment step, so they go straight to the admin
     // "Awaiting confirm" queue (payment_received). UPI orders wait at
     // 'pending' until the customer marks payment as made.
@@ -156,6 +156,7 @@ export const ordersApi = {
         deliveryAddress: deliveryAddress || null,
         customerName: customerName || null,
         pickupAt: pickupAt || null,
+        notes: notes || null,
         status: paymentMethod === 'QR_UPI' ? 'pending' : 'payment_received',
         paymentStatus: 'pending',
       }])

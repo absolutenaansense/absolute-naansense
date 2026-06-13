@@ -42,7 +42,8 @@ function StepBar({ current }) {
 export default function CheckoutPage() {
   const [step, setStep] = useState(0)
   const [orderType, setOrderType] = useState('DELIVERY')
-  const [pickupTime, setPickupTime] = useState('')   // datetime-local string for takeaway
+  const [pickupTime, setPickupTime] = useState('')   // HH:mm for takeaway
+  const [orderNote, setOrderNote] = useState('')      // whole-order special request
   const [selectedAddressId, setSelectedAddressId] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('CASH_ON_DELIVERY')
   const [newAddress, setNewAddress] = useState({ label: 'Home', line1: '', line2: '', city: '', pincode: '' })
@@ -69,10 +70,15 @@ export default function CheckoutPage() {
   const gst = Math.round(subtotal * GST_RATE)
   const total = subtotal + deliveryFee + gst
 
-  // Pickup must be at least 30 minutes out (preparation time).
+  // Pickup is a time today, at least 30 minutes out (preparation time).
   const pad2 = n => String(n).padStart(2, '0')
-  const toLocalInput = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`
-  const minPickup = toLocalInput(new Date(Date.now() + 30 * 60000))
+  const minPickupDate = new Date(Date.now() + 30 * 60000)
+  const minPickupTime = `${pad2(minPickupDate.getHours())}:${pad2(minPickupDate.getMinutes())}`
+  const pickupDateObj = () => {
+    if (!pickupTime) return null
+    const [h, m] = pickupTime.split(':').map(Number)
+    const d = new Date(); d.setHours(h, m, 0, 0); return d
+  }
 
   const { data: addresses = [], refetch: refetchProfile } = useQuery({
     queryKey: ['addresses', user?.id],
@@ -110,8 +116,9 @@ export default function CheckoutPage() {
 
   const pickupValid = () => {
     if (orderType !== 'TAKEAWAY') return true
-    if (!pickupTime) { toast.error('Please choose a pickup time'); return false }
-    if (new Date(pickupTime).getTime() < Date.now() + 30 * 60000 - 60000) { toast.error('Pickup time must be at least 30 minutes from now'); return false }
+    const d = pickupDateObj()
+    if (!d) { toast.error('Please choose a pickup time'); return false }
+    if (d.getTime() < Date.now() + 30 * 60000 - 60000) { toast.error('Pickup time must be at least 30 minutes from now'); return false }
     return true
   }
 
@@ -140,7 +147,7 @@ export default function CheckoutPage() {
       const addressText = selectedAddress
         ? `${selectedAddress.line1}${selectedAddress.line2 ? ', ' + selectedAddress.line2 : ''}, ${selectedAddress.city} - ${selectedAddress.pincode}`
         : null
-      const pickupAt = orderType === 'TAKEAWAY' && pickupTime ? new Date(pickupTime).toISOString() : null
+      const pickupAt = orderType === 'TAKEAWAY' ? (pickupDateObj()?.toISOString() || null) : null
       const { data } = await ordersApi.createOrder({
         userId: user.id,
         items: orderItems,
@@ -149,6 +156,7 @@ export default function CheckoutPage() {
         orderType,
         deliveryAddress: addressText,
         pickupAt,
+        notes: orderNote.trim() || null,
       })
       // Snapshot the order for the WhatsApp image (cart is cleared right after).
       setPlacedSnapshot({
@@ -300,10 +308,10 @@ export default function CheckoutPage() {
                 <span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span>
               </div>
               <div className="flex justify-between text-sm text-stone-500">
-                <span>Delivery fee</span><span>{deliveryFee > 0 ? `₹${deliveryFee}` : 'Free'}</span>
+                <span>GST (5%)</span><span>₹{gst}</span>
               </div>
               <div className="flex justify-between text-sm text-stone-500">
-                <span>GST (5%)</span><span>₹{gst}</span>
+                <span>Delivery fee</span><span>{deliveryFee > 0 ? `₹${deliveryFee}` : 'Free'}</span>
               </div>
               <div className="flex justify-between text-base font-semibold text-stone-900 pt-1">
                 <span>Total</span><span>₹{total.toFixed(0)}</span>
@@ -335,6 +343,19 @@ export default function CheckoutPage() {
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* Whole-order special request */}
+          <div className="card p-4">
+            <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Special request (optional)</div>
+            <textarea
+              value={orderNote}
+              onChange={e => setOrderNote(e.target.value)}
+              rows={2}
+              maxLength={300}
+              placeholder="Any instructions for the whole order? e.g. less spicy, no onion, extra napkins"
+              className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 resize-none"
+            />
           </div>
 
           {orderType === 'DELIVERY' && (
@@ -414,13 +435,13 @@ export default function CheckoutPage() {
             <div className="card p-4">
               <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">Pickup time</div>
               <input
-                type="datetime-local"
+                type="time"
                 value={pickupTime}
-                min={minPickup}
+                min={minPickupTime}
                 onChange={e => setPickupTime(e.target.value)}
                 className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2.5"
               />
-              <div className="text-xs text-stone-400 mt-2">Choose a time at least 30 minutes from now so we can prepare your order. No delivery charge on takeaway.</div>
+              <div className="text-xs text-stone-400 mt-2">Pick a time today, at least 30 minutes from now so we can prepare your order. No delivery charge on takeaway.</div>
             </div>
           )}
 
@@ -609,8 +630,8 @@ export default function CheckoutPage() {
                   </div>
                   <div className="border-t border-stone-100 mt-3 pt-3 space-y-1 text-sm">
                     <div className="flex justify-between text-stone-500"><span>Subtotal</span><span>₹{placedSnapshot.subtotal.toFixed(0)}</span></div>
-                    <div className="flex justify-between text-stone-500"><span>Delivery fee</span><span>{placedSnapshot.deliveryFee > 0 ? `₹${placedSnapshot.deliveryFee}` : 'Free'}</span></div>
                     <div className="flex justify-between text-stone-500"><span>GST (5%)</span><span>₹{placedSnapshot.gst}</span></div>
+                    <div className="flex justify-between text-stone-500"><span>Delivery fee</span><span>{placedSnapshot.deliveryFee > 0 ? `₹${placedSnapshot.deliveryFee}` : 'Free'}</span></div>
                     <div className="flex justify-between font-semibold text-stone-900 pt-1"><span>Total</span><span>₹{placedSnapshot.total.toFixed(0)}</span></div>
                   </div>
                   {placedSnapshot.orderType === 'TAKEAWAY' && placedSnapshot.pickupAt && <div className="mt-3 text-xs text-stone-500"><span className="text-stone-400">Pickup at: </span>{formatIST(placedSnapshot.pickupAt, 'dd MMM, h:mm a')}</div>}

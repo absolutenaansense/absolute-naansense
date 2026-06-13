@@ -166,6 +166,11 @@ function OrderCard({ order, refetch, now }) {
               <span className="text-amber-500">Pickup at: </span>{formatIST(order.pickupAt, 'dd MMM, h:mm a')}
             </div>
           )}
+          {meta.note && (
+            <div className="bg-amber-50 rounded-xl p-3 text-xs text-amber-700">
+              <span className="text-amber-500">Special request: </span>{meta.note}
+            </div>
+          )}
 
           {/* Payment info */}
           <div className="bg-stone-50 rounded-xl p-3 text-xs text-stone-500 flex justify-between">

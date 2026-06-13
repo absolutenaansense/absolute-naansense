@@ -15,7 +15,7 @@ export default function CustomerLayout({ children, showBack = false, title }) {
   }
 
   return (
-    <div className="min-h-screen bg-stone-50">
+    <div className="customer-theme min-h-screen">
       {/* Top bar */}
       <header className="bg-white border-b border-stone-100 sticky top-0 z-40 safe-top">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">

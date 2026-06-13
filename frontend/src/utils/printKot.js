@@ -90,6 +90,7 @@ export function printTicket(order, opts = {}) {
     ${(meta.phone || (order.user?.phone && order.user.phone !== '0000000000')) ? `<div>Phone: ${esc(meta.phone || order.user.phone)}</div>` : ''}
     ${!isDineIn && meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
     ${isTakeaway && order.pickupAt ? `<div>Pickup: ${esc(formatIST(order.pickupAt, 'dd/MM HH:mm'))}</div>` : ''}
+    ${meta.note ? `<div style="font-weight:bold">Note: ${esc(meta.note)}</div>` : ''}
     <div class="hr"></div>
     <table>
       <thead><tr><th>Item</th>${showPrices ? '<th class="pr">Amt</th>' : ''}<th class="qty">Qty</th></tr></thead>
@@ -109,8 +110,21 @@ export function printTicket(order, opts = {}) {
   printHtml(html)
 }
 
-// Shared: render HTML in a hidden iframe and send to the printer.
+// Print the given HTML. Prefer a dedicated window so ONLY this document prints
+// (a hidden iframe can make mobile browsers print the whole underlying page).
+// Falls back to an iframe when a popup is blocked (e.g. admin auto-print with
+// no user gesture).
 function printHtml(html) {
+  const w = window.open('', '_blank', 'width=400,height=640')
+  if (w && w.document) {
+    w.document.open(); w.document.write(html); w.document.close()
+    w.focus()
+    const go = () => { try { w.print() } catch (e) { console.error('Print failed', e) } }
+    if (w.document.readyState === 'complete') setTimeout(go, 300)
+    else w.onload = () => setTimeout(go, 300)
+    return
+  }
+  // Fallback: hidden iframe (popup blocked / no user gesture)
   const iframe = document.createElement('iframe')
   iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;'
   document.body.appendChild(iframe)
