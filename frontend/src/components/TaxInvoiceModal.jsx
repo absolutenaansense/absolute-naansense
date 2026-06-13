@@ -14,6 +14,11 @@ export default function TaxInvoiceModal({ order, onClose }) {
   const items = order.items || []
   const type = (meta.type || '').toUpperCase()
   const heading = type === 'DINE_IN' ? `Dine In: ${meta.table || ''}` : (type === 'TAKEAWAY' ? 'Take Away' : 'Delivery')
+  // Online orders don't set customerName/Phone — fall back to the linked user.
+  const custName = meta.name || order.user?.name || ''
+  const custPhone = meta.phone || order.user?.phone || ''
+  const cancelled = order.status === 'cancelled'
+  const displayedAt = formatIST(new Date().toISOString(), 'dd MMM yyyy, h:mm:ss a')
 
   const subtotal = items.reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
   const comp = !!order.isComplimentary
@@ -44,7 +49,14 @@ export default function TaxInvoiceModal({ order, onClose }) {
         </div>
 
         {/* Receipt body */}
-        <div className="overflow-y-auto px-5 py-4 font-mono text-[13px] text-stone-800 leading-relaxed">
+        <div className="relative overflow-y-auto px-5 py-4 font-mono text-[13px] text-stone-800 leading-relaxed">
+          {cancelled && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center z-10">
+              <span className="text-red-600/70 font-extrabold tracking-widest border-4 border-red-600/70 rounded px-4 py-1 text-3xl -rotate-45 select-none">
+                CANCELLED
+              </span>
+            </div>
+          )}
           <div className="text-center">
             <div className="text-base font-bold">{RESTAURANT.name}</div>
             <div className="text-xs">{RESTAURANT.address}</div>
@@ -57,8 +69,8 @@ export default function TaxInvoiceModal({ order, onClose }) {
           <div className="text-center font-bold tracking-wider">TAX INVOICE</div>
           <div className="border-t border-dashed border-stone-300 my-2" />
 
-          <div>Name: {meta.name || ''}</div>
-          {meta.phone && <div>Phone: {meta.phone}</div>}
+          <div>Name: {custName}</div>
+          {custPhone && <div>Phone: {custPhone}</div>}
           {meta.address && <div>Address: {meta.address}</div>}
           <div className="flex justify-between">
             <span>Date: {formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm')}</span>
@@ -107,8 +119,10 @@ export default function TaxInvoiceModal({ order, onClose }) {
           <div className="border-t border-dashed border-stone-300 my-2" />
 
           <div>Paid via {paid}</div>
+          {cancelled && <div className="text-red-600 font-bold">Status: CANCELLED</div>}
           <div className="border-t border-dashed border-stone-300 my-2" />
           <div className="text-center">{RESTAURANT.footer}</div>
+          <div className="text-center text-[11px] text-stone-400 mt-1">Displayed on {displayedAt} IST</div>
         </div>
 
         <div className="px-4 py-3 border-t border-stone-100">

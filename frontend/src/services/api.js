@@ -208,7 +208,7 @@ export const ordersApi = {
   myOrders: async (userId) => {
     const { data, error } = await supabase
       .from('Order')
-      .select('*, items:OrderItem(*, menuItem:MenuItem(name, price))')
+      .select('*, items:OrderItem(*, menuItem:MenuItem(name, price)), user:User(name, phone)')
       .eq('userId', userId)
       .order('createdAt', { ascending: false })
     if (error) throw { response: { data: { error: error.message } } }
@@ -356,7 +356,7 @@ export const reportsApi = {
     const since = new Date(Date.now() - 120 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('Order')
-      .select('id, billNo, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
+      .select('id, billNo, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
       .gte('createdAt', since)
       .order('createdAt', { ascending: false })
     if (error) throw { response: { data: { error: error.message } } }
@@ -366,7 +366,7 @@ export const reportsApi = {
   byBillNo: async (n) => {
     const { data, error } = await supabase
       .from('Order')
-      .select('*, items:OrderItem(id, quantity, price, menuItemId, specialRequest, itemName, menuItem:MenuItem(name))')
+      .select('*, user:User(name, phone), items:OrderItem(id, quantity, price, menuItemId, specialRequest, itemName, menuItem:MenuItem(name))')
       .eq('billNo', n)
       .maybeSingle()
     if (error) throw { response: { data: { error: error.message } } }
