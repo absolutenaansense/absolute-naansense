@@ -482,15 +482,39 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              <div className="card p-4 space-y-2 text-center">
-                <div className="text-sm font-semibold text-stone-800">Send your order to the restaurant</div>
-                <div className="text-xs text-stone-500">Creates an image of your order and opens WhatsApp to send it to +{RESTAURANT.kotWhatsApp}. We'll ask before opening WhatsApp.</div>
-                <button onClick={handleWhatsApp} className="w-full justify-center py-3 rounded-2xl text-white font-medium flex items-center gap-2 bg-green-600 hover:bg-green-700">
-                  <MessageCircle size={16} /> Send on WhatsApp
-                </button>
-              </div>
+              {/* Prominent WhatsApp send */}
+              <button onClick={handleWhatsApp} className="w-full justify-center py-4 rounded-2xl text-white font-semibold flex items-center gap-2 bg-green-600 hover:bg-green-700 shadow-sm">
+                <MessageCircle size={18} /> Send order to restaurant on WhatsApp
+              </button>
+              <div className="text-xs text-stone-400 text-center -mt-1">Sends your order as an image to +{RESTAURANT.kotWhatsApp}. We'll ask before opening WhatsApp.</div>
+
+              {/* Full order details */}
+              {placedSnapshot && (
+                <div className="card p-4">
+                  <div className="text-xs font-semibold text-stone-400 uppercase mb-1">Order details</div>
+                  <div className="text-xs text-stone-400 mb-2">{placedSnapshot.dateStr} · Cash on delivery</div>
+                  <div className="space-y-1.5">
+                    {placedSnapshot.items.map((it, i) => (
+                      <div key={i} className="text-sm">
+                        <div className="flex justify-between"><span className="text-stone-700">{it.name} × {it.quantity}</span><span className="font-medium">₹{(it.price * it.quantity).toFixed(0)}</span></div>
+                        {it.note && <div className="text-xs text-amber-600 italic pl-1">↳ {it.note}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="border-t border-stone-100 mt-3 pt-3 space-y-1 text-sm">
+                    <div className="flex justify-between text-stone-500"><span>Subtotal</span><span>₹{placedSnapshot.subtotal.toFixed(0)}</span></div>
+                    <div className="flex justify-between text-stone-500"><span>Delivery fee</span><span>{placedSnapshot.deliveryFee > 0 ? `₹${placedSnapshot.deliveryFee}` : 'Free'}</span></div>
+                    <div className="flex justify-between text-stone-500"><span>GST (5%)</span><span>₹{placedSnapshot.gst}</span></div>
+                    <div className="flex justify-between font-semibold text-stone-900 pt-1"><span>Total</span><span>₹{placedSnapshot.total.toFixed(0)}</span></div>
+                  </div>
+                  {placedSnapshot.address && <div className="mt-3 text-xs text-stone-500"><span className="text-stone-400">Deliver to: </span>{placedSnapshot.address}</div>}
+                  {(placedSnapshot.name || placedSnapshot.phone) && <div className="text-xs text-stone-500 mt-0.5">{placedSnapshot.name}{placedSnapshot.phone ? ` · ${placedSnapshot.phone}` : ''}</div>}
+                </div>
+              )}
 
               <PayAheadQR amount={paidTotal} />
+
+              <button onClick={() => navigate('/orders')} className="btn-secondary w-full justify-center">View my orders</button>
             </>
           )}
 
