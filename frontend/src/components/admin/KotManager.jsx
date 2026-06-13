@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { X, Printer, Eye, Trash2, Pencil, Minus, Plus, Search } from 'lucide-react'
+import { X, Printer, Eye, Trash2, Pencil, Minus, Plus, Search, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { dineApi } from '../../services/api'
 import { formatIST } from '../../utils/dateIST'
 import { printTicket } from '../../utils/printKot'
+import { sendKotWhatsApp } from '../../utils/whatsappKot'
 
 const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
@@ -108,6 +109,7 @@ export default function KotManager() {
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => setViewKot(v => v === kot.kotNo ? null : kot.kotNo)} title="View" className="w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50"><Eye size={15} /></button>
                   <button onClick={() => doPrint(kot)} title="Print" className="w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50"><Printer size={15} /></button>
+                  <button onClick={() => sendKotWhatsApp({ ...kot.order, items: kot.items }, kot.kotNo)} title="WhatsApp" className="w-8 h-8 flex items-center justify-center rounded-lg border border-green-200 text-green-600 hover:bg-green-50"><MessageCircle size={15} /></button>
                   {!kot.used && (
                     <>
                       <button onClick={() => startModify(kot)} title="Modify" className="w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={15} /></button>

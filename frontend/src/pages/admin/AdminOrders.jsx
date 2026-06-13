@@ -1,12 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '../../services/supabase'
-import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer, Receipt } from 'lucide-react'
+import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer, Receipt, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
 import { etaInfo } from '../../utils/eta'
 import { getOrderMeta, itemNote } from '../../utils/orderNotes'
 import { printTicket, printBill } from '../../utils/printKot'
+import { sendKotWhatsApp } from '../../utils/whatsappKot'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { ordersApi } from '../../services/api'
 
@@ -209,6 +210,12 @@ function OrderCard({ order, refetch, now }) {
                   className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm font-medium flex items-center gap-1.5"
                 >
                   <Receipt size={15} /> Bill
+                </button>
+                <button
+                  onClick={() => sendKotWhatsApp(order)}
+                  className="px-4 py-2.5 rounded-xl border border-green-200 text-green-600 hover:bg-green-50 text-sm font-medium flex items-center gap-1.5"
+                >
+                  <MessageCircle size={15} /> WhatsApp KOT
                 </button>
               </>
             )}

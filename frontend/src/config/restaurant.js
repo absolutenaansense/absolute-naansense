@@ -7,6 +7,7 @@ export const RESTAURANT = {
   mobile: '9140875438',
   cashier: 'biller',
   footer: 'Waiting to Serve Your Taste Buds Again :)',
+  kotWhatsApp: '918299018895',  // KOTs are sent here on WhatsApp (country code, no +)
 }
 
 export const GST_RATE = 0.05      // total GST
