@@ -210,7 +210,7 @@ export default function AdminReservations() {
                     {FLOOR_SECTIONS.map(section => (
                       <optgroup key={section.name} label={section.name}>
                         {section.tables.map(t => (
-                          <option key={t.label} value={t.label}>{t.label} ({t.seats} seats)</option>
+                          <option key={t.label} value={t.label}>{t.label}</option>
                         ))}
                       </optgroup>
                     ))}

@@ -460,6 +460,30 @@ export const dineApi = {
     if (error) throw { response: { data: { error: error.message } } }
   },
 
+  // Edit a running order's items: change quantities and/or remove lines, then
+  // recompute the total (and reset billPrinted since the order changed).
+  updateOrderItems: async ({ orderId, updates = [], removeIds = [] }) => {
+    for (const u of updates) {
+      const { error } = await supabase.from('OrderItem').update({ quantity: u.quantity }).eq('id', u.id)
+      if (error) throw { response: { data: { error: error.message } } }
+    }
+    if (removeIds.length) {
+      const { error } = await supabase.from('OrderItem').delete().in('id', removeIds)
+      if (error) throw { response: { data: { error: error.message } } }
+    }
+    const { data: allItems } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
+    const { total } = totalsFor(allItems || [])
+    const { error } = await supabase.from('Order').update({ total, billPrinted: false, updatedAt: new Date().toISOString() }).eq('id', orderId)
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { total } }
+  },
+
+  // Move a running order to a different table.
+  moveOrder: async ({ orderId, tableLabel }) => {
+    const { error } = await supabase.from('Order').update({ tableLabel, updatedAt: new Date().toISOString() }).eq('id', orderId)
+    if (error) throw { response: { data: { error: error.message } } }
+  },
+
   cancel: async (orderId) => {
     const { error } = await supabase.from('Order').update({ status: 'cancelled', updatedAt: new Date().toISOString() }).eq('id', orderId)
     if (error) throw { response: { data: { error: error.message } } }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Minus, X, Printer, Receipt, Search, Trash2, Clock, Pause, Play, ShoppingBag } from 'lucide-react'
+import { Plus, Minus, X, Printer, Receipt, Search, Trash2, Clock, Pause, Play, ShoppingBag, Pencil, ArrowRightLeft } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { menuApi, dineApi } from '../../services/api'
@@ -14,6 +14,12 @@ const totals = (items) => {
   const subtotal = items.reduce((s, i) => s + parseFloat(i.price) * (i.quantity || 0), 0)
   const gst = Math.round(subtotal * GST_RATE)
   return { subtotal, gst, total: subtotal + gst }
+}
+// Minutes since the order was opened (DB timestamps are UTC without a 'Z').
+const elapsedMin = (createdAt) => {
+  if (!createdAt) return 0
+  const iso = /[Z+]/.test(createdAt) ? createdAt : createdAt + 'Z'
+  return Math.max(0, Math.floor((Date.now() - Date.parse(iso)) / 60000))
 }
 const stateOf = (order) => {
   if (!order) return 'blank'
@@ -41,6 +47,8 @@ export default function AdminDineIn() {
   const [search, setSearch] = useState('')
   const [settleOpen, setSettleOpen] = useState(false)
   const [recentOpen, setRecentOpen] = useState(false)
+  const [editDraft, setEditDraft] = useState(null)  // null = closed; else [{id,name,quantity,price}]
+  const [moveOpen, setMoveOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
   const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
@@ -134,6 +142,32 @@ export default function AdminDineIn() {
     catch (e) { toast.error('Failed') } finally { setBusy(false) }
   }
 
+  // Check Items: edit a running order's committed items.
+  const openEdit = () => setEditDraft(committed.map(it => ({ id: it.id, name: it.menuItem?.name || '', quantity: it.quantity, price: it.price })))
+  const editQty = (id, d) => setEditDraft(arr => arr.map(r => r.id === id ? { ...r, quantity: Math.max(1, r.quantity + d) } : r))
+  const editRemove = (id) => setEditDraft(arr => arr.filter(r => r.id !== id))
+  const saveEdit = async () => {
+    if (!activeOrder || !editDraft) return
+    setBusy(true)
+    try {
+      const keptIds = editDraft.map(r => r.id)
+      const removeIds = committed.map(i => i.id).filter(id => !keptIds.includes(id))
+      const updates = editDraft
+        .filter(r => { const o = committed.find(i => i.id === r.id); return o && o.quantity !== r.quantity })
+        .map(r => ({ id: r.id, quantity: r.quantity }))
+      await dineApi.updateOrderItems({ orderId: activeOrder.id, updates, removeIds })
+      toast.success('Order updated'); setEditDraft(null); await refetch()
+    } catch (e) { toast.error('Failed to update') } finally { setBusy(false) }
+  }
+
+  // Move the running order to another (free) table.
+  const doMove = async (toLabel) => {
+    if (!activeOrder) return
+    setBusy(true)
+    try { await dineApi.moveOrder({ orderId: activeOrder.id, tableLabel: toLabel }); toast.success(`Moved to ${toLabel}`); setMoveOpen(false); setCtx({ type: 'DINE_IN', label: toLabel }); await refetch() }
+    catch (e) { toast.error('Failed to move') } finally { setBusy(false) }
+  }
+
   // Take-away: one-shot counter sale (create -> pay -> close), prints KOT + bill.
   const takeawayCheckout = async (paymentMethod) => {
     if (pendingArr.length === 0) { toast.error('Add items first'); return }
@@ -182,9 +216,12 @@ export default function AdminDineIn() {
                   className={`relative rounded-xl border-2 p-3 text-left transition-all active:scale-95 ${TILE[st]}`}>
                   {ord?.isHeld && <span className="absolute top-1.5 right-1.5 text-[9px] bg-stone-800 text-white px-1 rounded">HOLD</span>}
                   <div className="font-semibold text-stone-800">{t.label}</div>
-                  <div className="text-[11px] text-stone-400">{t.seats} seats</div>
-                  {ord ? <div className="text-xs font-semibold text-stone-700 mt-1">₹{parseFloat(ord.total).toFixed(0)}</div>
-                       : <div className="text-[11px] text-stone-400 mt-1">Free</div>}
+                  {ord ? (
+                    <div className="mt-1">
+                      <div className="text-xs font-semibold text-stone-700">₹{parseFloat(ord.total).toFixed(0)}</div>
+                      <div className="text-[10px] text-stone-500 flex items-center gap-0.5"><Clock size={9} /> {elapsedMin(ord.createdAt)}m</div>
+                    </div>
+                  ) : <div className="text-[11px] text-stone-400 mt-1">Free</div>}
                 </button>
               )
             })}
@@ -231,8 +268,8 @@ export default function AdminDineIn() {
               <div>
                 <div className="font-semibold text-stone-900">{isDineIn ? `Table ${ctx.label}` : 'Take Away'}</div>
                 <div className="text-xs text-stone-400">
-                  {isDineIn ? `${activeMeta?.section} · ${activeMeta?.seats} seats · ` : ''}
-                  {isDineIn ? (activeOrder ? state.charAt(0).toUpperCase() + state.slice(1) : 'Free') : 'Counter sale'}
+                  {isDineIn ? `${activeMeta?.section} · ` : ''}
+                  {isDineIn ? (activeOrder ? `${state.charAt(0).toUpperCase() + state.slice(1)} · ${elapsedMin(activeOrder.createdAt)}m` : 'Free') : 'Counter sale'}
                 </div>
               </div>
               <button onClick={close} className="p-2 text-stone-400 hover:text-stone-700"><X size={20} /></button>
@@ -342,6 +379,10 @@ export default function AdminDineIn() {
                       <button disabled={busy} onClick={() => setSettleOpen(true)} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
+                      <button disabled={busy || committed.length === 0} onClick={openEdit} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Pencil size={14} className="inline" /> Edit items</button>
+                      <button disabled={busy} onClick={() => setMoveOpen(true)} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><ArrowRightLeft size={14} className="inline" /> Move table</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
                       <button disabled={busy} onClick={toggleHold} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm">{activeOrder.isHeld ? <><Play size={14} className="inline" /> Resume</> : <><Pause size={14} className="inline" /> Hold</>}</button>
                       <button disabled={busy} onClick={cancelOrder} className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm"><Trash2 size={14} className="inline" /> Cancel</button>
                     </div>
@@ -349,6 +390,65 @@ export default function AdminDineIn() {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Check Items (edit running order) */}
+      {editDraft && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setEditDraft(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
+              <span className="font-semibold text-stone-900">Check Items{isDineIn ? ` — Table ${ctx.label}` : ''}</span>
+              <button onClick={() => setEditDraft(null)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-2 max-h-[60vh] overflow-y-auto">
+              {editDraft.length === 0 && <div className="text-sm text-stone-400 text-center py-6">No items left</div>}
+              {editDraft.map(r => (
+                <div key={r.id} className="flex items-center gap-3">
+                  <button onClick={() => editRemove(r.id)} className="w-8 h-8 flex items-center justify-center rounded-lg border border-stone-200 text-stone-400 hover:text-red-500 hover:border-red-200"><X size={15} /></button>
+                  <span className="flex-1 text-sm text-stone-700">{r.name}</span>
+                  <div className="flex items-center gap-1 bg-stone-50 rounded-lg p-1">
+                    <button onClick={() => editQty(r.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-stone-200"><Minus size={14} /></button>
+                    <span className="text-sm font-medium w-6 text-center">{r.quantity}</span>
+                    <button onClick={() => editQty(r.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-stone-200"><Plus size={14} /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-stone-100">
+              <button onClick={() => setEditDraft(null)} className="px-4 py-2 rounded-xl border border-stone-200 text-stone-600 text-sm">Cancel</button>
+              <button onClick={() => printTicket(activeOrder, { title: 'BILL', showPrices: true })} className="px-4 py-2 rounded-xl bg-stone-800 text-white text-sm">Print</button>
+              <button disabled={busy} onClick={saveEdit} className="btn-primary px-5 py-2 rounded-xl">Update</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Move KOT/Items to another table */}
+      {moveOpen && activeOrder && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={() => setMoveOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-stone-100">
+              <span className="font-semibold text-stone-900">Move Table {ctx.label} →</span>
+              <button onClick={() => setMoveOpen(false)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="text-xs text-stone-400">Pick a free table to move this order to.</div>
+              {FLOOR_SECTIONS.map(section => {
+                const free = section.tables.filter(t => t.label !== ctx.label && !ordersByTable[t.label])
+                if (!free.length) return null
+                return (
+                  <div key={section.name}>
+                    <div className="text-[11px] font-semibold text-stone-400 uppercase mb-1.5">{section.name}</div>
+                    <div className="grid grid-cols-4 gap-2">
+                      {free.map(t => (
+                        <button key={t.label} disabled={busy} onClick={() => doMove(t.label)} className="rounded-lg border border-stone-200 py-2 text-sm hover:border-brand-400 hover:bg-brand-50">{t.label}</button>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       )}
