@@ -467,12 +467,26 @@ export const dineApi = {
     return { data }
   },
 
-  // Mark paid (table shows "Paid" but stays until cleared).
-  settle: async ({ orderId, paymentMethod }) => {
+  // Mark paid with optional discount, complimentary, and split payments.
+  // Recomputes the total authoritatively (discount applied before 5% GST).
+  settle: async ({ orderId, payments = [], discount = 0, complimentary = false }) => {
+    const { data: items } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
+    const subtotal = (items || []).reduce((s, i) => s + parseFloat(i.price) * i.quantity, 0)
+    const disc = complimentary ? subtotal : Math.min(Math.max(0, discount), subtotal)
+    const taxable = Math.max(0, subtotal - disc)
+    const grand = complimentary ? 0 : Math.round(taxable * 1.05)
     const billNo = await dineApi.ensureBillNo(orderId)
+    const paymentMethod = complimentary ? 'COMPLIMENTARY'
+      : payments.length > 1 ? 'SPLIT'
+      : (payments[0]?.method === 'UPI' ? 'QR_UPI' : 'CASH_ON_DELIVERY')
     const { data, error } = await supabase
       .from('Order')
-      .update({ paymentStatus: 'paid', paymentMethod, billPrinted: true, billNo, updatedAt: new Date().toISOString() })
+      .update({
+        paymentStatus: 'paid', paymentMethod, total: grand,
+        discount: disc, isComplimentary: complimentary,
+        payments: payments.length ? payments : null,
+        billPrinted: true, billNo, updatedAt: new Date().toISOString(),
+      })
       .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
     return { data }

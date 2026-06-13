@@ -115,16 +115,21 @@ export function printBill(order) {
   const heading = type === 'DINE_IN' ? `Dine In: ${meta.table || ''}` : (type === 'TAKEAWAY' ? 'Take Away' : 'Delivery')
 
   const subtotal = items.reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
-  const cgst = subtotal * CGST_RATE
-  const sgst = subtotal * SGST_RATE
-  const grandRaw = subtotal + cgst + sgst
-  const grand = Math.round(grandRaw)
-  const roundOff = grand - grandRaw
+  const comp = !!order.isComplimentary
+  const discount = comp ? subtotal : Math.min(parseFloat(order.discount || 0), subtotal)
+  const taxable = Math.max(0, subtotal - discount)
+  const cgst = comp ? 0 : taxable * CGST_RATE
+  const sgst = comp ? 0 : taxable * SGST_RATE
+  const grand = comp ? 0 : (order.total != null ? parseFloat(order.total) : Math.round(taxable + cgst + sgst))
+  const roundOff = grand - (taxable + cgst + sgst)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
 
   const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const money = (n) => n.toFixed(2)
-  const paid = order.paymentMethod === 'QR_UPI' ? 'Other [UPI]' : 'Cash'
+  const paid = comp ? 'Complimentary'
+    : (order.paymentMethod === 'SPLIT' && Array.isArray(order.payments))
+      ? 'Split — ' + order.payments.map(p => `${p.method} ₹${Number(p.amount).toFixed(0)}`).join(', ')
+      : (order.paymentMethod === 'QR_UPI' ? 'Other [UPI]' : 'Cash')
 
   const rows = items.map((it, i) => `<tr>
     <td>${i + 1}</td>
@@ -165,6 +170,7 @@ export function printBill(order) {
     </table>
     <div class="hr"></div>
     <div class="row"><span>Total Qty: ${totalQty}</span><span>Sub Total&nbsp;&nbsp;${money(subtotal)}</span></div>
+    ${discount > 0 ? `<div class="row"><span></span><span>Discount&nbsp;&nbsp;-${money(discount)}</span></div>` : ''}
     <div class="row"><span></span><span>CGST 2.5%&nbsp;&nbsp;${money(cgst)}</span></div>
     <div class="row"><span></span><span>SGST 2.5%&nbsp;&nbsp;${money(sgst)}</span></div>
     <div class="row"><span></span><span>Round off&nbsp;&nbsp;${roundOff >= 0 ? '+' : ''}${money(roundOff)}</span></div>

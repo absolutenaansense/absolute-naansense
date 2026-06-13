@@ -49,6 +49,10 @@ export default function AdminDineIn() {
   const [recentOpen, setRecentOpen] = useState(false)
   const [editDraft, setEditDraft] = useState(null)  // null = closed; else [{id,name,quantity,price}]
   const [moveOpen, setMoveOpen] = useState(false)
+  const [discount, setDiscount] = useState('')
+  const [complimentary, setComplimentary] = useState(false)
+  const [payMode, setPayMode] = useState('cash')  // cash | upi | split
+  const [cashAmt, setCashAmt] = useState('')
   const [busy, setBusy] = useState(false)
 
   const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
@@ -113,11 +117,24 @@ export default function AdminDineIn() {
     catch (e) { toast.error('Failed to print bill') } finally { setBusy(false) }
   }
 
-  const settle = async (paymentMethod) => {
+  const openSettle = () => { setDiscount(''); setComplimentary(false); setPayMode('cash'); setCashAmt(''); setSettleOpen(true) }
+
+  const doSettle = async () => {
     if (!activeOrder) return
+    const sub = committedTotals.subtotal
+    const disc = complimentary ? sub : Math.min(Number(discount) || 0, sub)
+    const grand = complimentary ? 0 : Math.round(Math.max(0, sub - disc) * 1.05)
+    let payments = []
+    if (!complimentary) {
+      if (payMode === 'split') { const cash = Math.min(Number(cashAmt) || 0, grand); payments = [{ method: 'Cash', amount: cash }, { method: 'UPI', amount: grand - cash }] }
+      else if (payMode === 'upi') payments = [{ method: 'UPI', amount: grand }]
+      else payments = [{ method: 'Cash', amount: grand }]
+    }
     setBusy(true)
-    try { const { data } = await dineApi.settle({ orderId: activeOrder.id, paymentMethod }); printBillTicket(data); toast.success(`Table ${ctx.label} paid`); setSettleOpen(false); await refetch() }
-    catch (e) { toast.error('Failed to settle') } finally { setBusy(false) }
+    try {
+      const { data } = await dineApi.settle({ orderId: activeOrder.id, payments, discount: complimentary ? 0 : disc, complimentary })
+      printBillTicket(data); toast.success(`Table ${ctx.label} settled`); setSettleOpen(false); await refetch()
+    } catch (e) { toast.error('Failed to settle') } finally { setBusy(false) }
   }
 
   const clearTable = async () => {
@@ -275,17 +292,54 @@ export default function AdminDineIn() {
               <button onClick={close} className="p-2 text-stone-400 hover:text-stone-700"><X size={20} /></button>
             </div>
 
-            {settleOpen && activeOrder ? (
-              <div className="p-4 space-y-4">
-                <Bill items={committed} t={committedTotals} label={ctx.label} order={activeOrder} />
-                <div className="text-xs text-stone-400 text-center">Mark how the customer paid.</div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button disabled={busy} onClick={() => settle('CASH_ON_DELIVERY')} className="btn-primary justify-center py-3 rounded-xl">Cash</button>
-                  <button disabled={busy} onClick={() => settle('QR_UPI')} className="btn-primary justify-center py-3 rounded-xl">UPI / Card</button>
+            {settleOpen && activeOrder ? (() => {
+              const sub = committedTotals.subtotal
+              const disc = complimentary ? sub : Math.min(Number(discount) || 0, sub)
+              const taxable = Math.max(0, sub - disc)
+              const half = complimentary ? 0 : taxable * 0.025
+              const grand = complimentary ? 0 : Math.round(taxable * 1.05)
+              const cash = Math.min(Number(cashAmt) || 0, grand)
+              return (
+                <div className="p-4 space-y-4">
+                  <div className="card p-4 space-y-1.5 text-sm">
+                    <div className="flex justify-between text-stone-500"><span>Sub Total</span><span>₹{sub.toFixed(2)}</span></div>
+                    {disc > 0 && <div className="flex justify-between text-stone-500"><span>Discount</span><span>-₹{disc.toFixed(2)}</span></div>}
+                    <div className="flex justify-between text-stone-500"><span>CGST 2.5%</span><span>₹{half.toFixed(2)}</span></div>
+                    <div className="flex justify-between text-stone-500"><span>SGST 2.5%</span><span>₹{half.toFixed(2)}</span></div>
+                    <div className="flex justify-between font-semibold text-base pt-1"><span>Grand Total</span><span>₹{grand.toFixed(0)}</span></div>
+                  </div>
+
+                  <div className="card p-4 space-y-3">
+                    <label className="flex items-center gap-2 text-sm text-stone-700"><input type="checkbox" checked={complimentary} onChange={e => setComplimentary(e.target.checked)} /> Complimentary (free)</label>
+                    {!complimentary && (
+                      <>
+                        <div>
+                          <label className="text-xs text-stone-400">Discount (₹)</label>
+                          <input type="number" min="0" value={discount} onChange={e => setDiscount(e.target.value)} placeholder="0" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                        </div>
+                        <div>
+                          <div className="text-xs text-stone-400 mb-1">Payment</div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {[['cash', 'Cash'], ['upi', 'UPI / Card'], ['split', 'Split']].map(([m, label]) => (
+                              <button key={m} onClick={() => setPayMode(m)} className={`py-2 rounded-lg border text-sm ${payMode === m ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-stone-200 text-stone-600'}`}>{label}</button>
+                            ))}
+                          </div>
+                          {payMode === 'split' && (
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                              <div><label className="text-xs text-stone-400">Cash ₹</label><input type="number" min="0" value={cashAmt} onChange={e => setCashAmt(e.target.value)} className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" /></div>
+                              <div><label className="text-xs text-stone-400">UPI ₹</label><input disabled value={(grand - cash).toFixed(0)} className="w-full text-sm bg-stone-100 border border-stone-200 rounded-lg px-3 py-2 text-stone-500" /></div>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  <button disabled={busy} onClick={doSettle} className="btn-primary w-full justify-center py-3 rounded-xl">{complimentary ? 'Mark complimentary' : `Settle ₹${grand.toFixed(0)}`}</button>
+                  <button onClick={() => setSettleOpen(false)} className="btn-ghost w-full justify-center text-stone-500">← Back</button>
                 </div>
-                <button onClick={() => setSettleOpen(false)} className="btn-ghost w-full justify-center text-stone-500">← Back</button>
-              </div>
-            ) : (
+              )
+            })() : (
               <div className="p-4 space-y-4">
                 <input value={custName} onChange={e => setCustName(e.target.value)} placeholder="Customer name (optional)"
                   className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2" />
@@ -376,7 +430,7 @@ export default function AdminDineIn() {
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <button disabled={busy} onClick={printBill} className="px-4 py-3 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-sm font-medium"><Receipt size={15} className="inline" /> Print bill</button>
-                      <button disabled={busy} onClick={() => setSettleOpen(true)} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
+                      <button disabled={busy} onClick={openSettle} className="btn-primary justify-center py-3 rounded-xl">Settle ₹{committedTotals.total.toFixed(0)}</button>
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <button disabled={busy || committed.length === 0} onClick={openEdit} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 hover:bg-stone-50 text-sm"><Pencil size={14} className="inline" /> Edit items</button>

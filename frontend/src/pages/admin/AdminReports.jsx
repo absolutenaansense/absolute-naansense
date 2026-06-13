@@ -12,7 +12,10 @@ const todayIST = () => formatIST(new Date().toISOString(), 'yyyy-MM-dd')
 const yesterdayIST = () => formatIST(new Date(Date.now() - 86400000).toISOString(), 'yyyy-MM-dd')
 
 const typeLabel = (m) => m.type === 'DINE_IN' ? `Dine-in${m.table ? ` (${m.table})` : ''}` : m.type === 'TAKEAWAY' ? 'Take Away' : 'Delivery'
-const payLabel = (o) => o.paymentMethod === 'QR_UPI' ? 'UPI' : 'Cash'
+const payLabel = (o) => o.paymentMethod === 'QR_UPI' ? 'UPI'
+  : o.paymentMethod === 'SPLIT' ? 'Split'
+  : o.paymentMethod === 'COMPLIMENTARY' ? 'Comp'
+  : 'Cash'
 
 export default function AdminReports() {
   const [preset, setPreset] = useState('today')
