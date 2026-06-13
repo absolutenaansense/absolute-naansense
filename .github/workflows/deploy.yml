@@ -25,14 +25,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Tries to turn on GitHub Pages (source: Actions) automatically.
-      # If the token lacks permission, enable it once manually:
-      # repo Settings -> Pages -> Build and deployment -> Source: GitHub Actions
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
