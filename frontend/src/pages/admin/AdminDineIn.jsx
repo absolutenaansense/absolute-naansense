@@ -9,7 +9,7 @@ import { formatIST } from '../../utils/dateIST'
 import { printTicket } from '../../utils/printKot'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 import { useStaff } from '../../staff/StaffContext'
-import { FLOOR_SECTIONS, ALL_TABLES } from '../../config/floorLayout'
+import { floorFor, tablesFor } from '../../config/floorLayout'
 
 const GST_RATE = 0.05
 const totals = (items) => {
@@ -80,6 +80,8 @@ export default function AdminDineIn() {
   const [invoiceOrder, setInvoiceOrder] = useState(null)   // on-screen, view-only tax invoice
   const staff = useStaff()
   const outlet = staff?.outlet || 'renukoot'
+  const sections = floorFor(outlet)       // outlet-specific floor layout
+  const allTables = tablesFor(outlet)
 
   const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
   const { data: openOrders = [], refetch } = useQuery({
@@ -115,7 +117,7 @@ export default function AdminDineIn() {
   const isDelivery = ctx?.type === 'DELIVERY'
   const isCounter = isTakeaway || isDelivery   // one-shot counter sale modes
   const activeOrder = isDineIn ? ordersByTable[ctx.label] : null
-  const activeMeta = isDineIn ? ALL_TABLES.find(t => t.label === ctx.label) : null
+  const activeMeta = isDineIn ? allTables.find(t => t.label === ctx.label) : null
   const state = stateOf(activeOrder)
   const committed = activeOrder?.items || []
   const committedTotals = totals(committed)
@@ -311,7 +313,7 @@ export default function AdminDineIn() {
         </div>
       </div>
 
-      {FLOOR_SECTIONS.map(section => (
+      {sections.map(section => (
         <div key={section.name} className="mb-6">
           <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-2">{section.name}</div>
           <div className="flex flex-wrap gap-3">
@@ -744,7 +746,7 @@ export default function AdminDineIn() {
 
               <div className="border-t border-stone-100 pt-3">
                 <div className="text-[11px] font-semibold text-stone-400 uppercase mb-2">Destination table {moveIds.length > 0 ? `(${moveIds.length} item${moveIds.length > 1 ? 's' : ''})` : ''}</div>
-                {FLOOR_SECTIONS.map(section => {
+                {sections.map(section => {
                   const free = section.tables.filter(t => t.label !== ctx.label && !ordersByTable[t.label])
                   if (!free.length) return null
                   return (

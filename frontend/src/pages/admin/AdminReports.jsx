@@ -42,7 +42,8 @@ export default function AdminReports() {
   const [billNo, setBillNo] = useState('')
   const [outletFilter, setOutletFilter] = useState(staff?.outlet || 'all')
   const [statusView, setStatusView] = useState('successful')  // successful | cancelled | all
-  const [payView, setPayView] = useState('all')               // all | cash | upi | gateway | card
+  const [payView, setPayView] = useState('all')               // all | cash | upi | card | online | part | due
+  const [reportTab, setReportTab] = useState('sales')         // sales | summary | items
   const activeOutlet = staff?.outlet || outletFilter
   const isBiller = staff?.kind === 'biller'   // billers get a read-only report (no modify/delete)
   const isSuper = staff?.isSuper              // only super admin can delete (hide) an order
@@ -132,18 +133,60 @@ export default function AdminReports() {
     return m
   }, [rows])
 
+  // --- Sub-report: Item-wise (qty + amount per menu item, successful sales) ---
+  const itemRows = (() => {
+    const m = {}
+    sales.forEach(r => (r.items || []).forEach(it => {
+      const name = it.menuItem?.name || it.itemName || 'Item'
+      if (!m[name]) m[name] = { name, qty: 0, amount: 0 }
+      m[name].qty += it.quantity || 0
+      m[name].amount += parseFloat(it.price || 0) * (it.quantity || 0)
+    }))
+    return Object.values(m).sort((a, b) => b.qty - a.qty)
+  })()
+  const itemTotals = itemRows.reduce((a, r) => ({ qty: a.qty + r.qty, amount: a.amount + r.amount }), { qty: 0, amount: 0 })
+
+  // --- Sub-report: Order summary (breakdowns over successful sales) ---
+  const typeSummary = [['DINE_IN', 'Dine-in'], ['TAKEAWAY', 'Take Away'], ['DELIVERY', 'Delivery']].map(([t, label]) => {
+    const list = sales.filter(r => r.meta?.type === t)
+    return { label, count: list.length, amount: list.reduce((s, r) => s + r.grand, 0) }
+  })
+  const paySummary = [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['online', 'Online'], ['part', 'Part'], ['due', 'Due'], ['comp', 'Comp']]
+    .map(([k, label]) => { const list = sales.filter(r => payCategory(r) === k); return { label, count: list.length, amount: list.reduce((s, r) => s + r.grand, 0) } })
+    .filter(x => x.count > 0)
+  const unsettledList = rows.filter(r => r.status !== 'cancelled' && r.billNo && !r.settled)
+  const unsettledAmt = unsettledList.reduce((s, r) => s + Math.max(0, r.grand - (parseFloat(r.paidAmount) || 0)), 0)
+  const avgOrder = sales.length ? tot.grand / sales.length : 0
+
   const exportCsv = () => {
-    const head = ['Bill No', 'Date', 'Order Type', 'Payment', 'Status', 'Sub Total', 'CGST', 'SGST', 'Total']
-    const lines = tableRows.map(r => [
-      r.billNo ?? '', formatIST(r.createdAt, 'dd-MM-yyyy HH:mm'), typeLabel(r.meta), payLabel(r),
-      r.status === 'cancelled' ? 'cancelled' : r.paymentStatus,
-      r.subtotal.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2), r.grand.toFixed(2),
-    ])
+    let head, lines, prefix
+    if (reportTab === 'items') {
+      prefix = 'items'
+      head = ['Item', 'Qty sold', 'Amount']
+      lines = itemRows.map(r => [r.name, r.qty, r.amount.toFixed(2)])
+    } else if (reportTab === 'summary') {
+      prefix = 'summary'
+      head = ['Group', 'Label', 'Count', 'Amount']
+      lines = [
+        ...typeSummary.map(x => ['Order type', x.label, x.count, x.amount.toFixed(2)]),
+        ...paySummary.map(x => ['Payment mode', x.label, x.count, x.amount.toFixed(2)]),
+        ...Object.entries(statusCounts).map(([s, n]) => ['Status', s.replace(/_/g, ' '), n, '']),
+        ['Settlement', 'Unsettled bills', unsettledList.length, unsettledAmt.toFixed(2)],
+      ]
+    } else {
+      prefix = 'sales'
+      head = ['Bill No', 'Date', 'Order Type', 'Payment', 'Status', 'Sub Total', 'CGST', 'SGST', 'Total']
+      lines = tableRows.map(r => [
+        r.billNo ?? '', formatIST(r.createdAt, 'dd-MM-yyyy HH:mm'), typeLabel(r.meta), payLabel(r),
+        r.status === 'cancelled' ? 'cancelled' : r.paymentStatus,
+        r.subtotal.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2), r.grand.toFixed(2),
+      ])
+    }
     const csv = [head, ...lines].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `sales_${from}_to_${to}.csv`
+    a.download = `${prefix}_${from}_to_${to}.csv`
     a.click()
   }
 
@@ -159,6 +202,7 @@ export default function AdminReports() {
               <option value="renusagar">Renusagar</option>
             </select>
           )}
+          {reportTab === 'sales' && (<>
           <select value={statusView} onChange={e => setStatusView(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
             <option value="successful">Successful orders</option>
             <option value="cancelled">Cancelled orders</option>
@@ -173,6 +217,7 @@ export default function AdminReports() {
             <option value="part">Part</option>
             <option value="due">Due</option>
           </select>
+          </>)}
           <select value={preset} onChange={e => applyPreset(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
             {TIMELINE_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
@@ -184,6 +229,15 @@ export default function AdminReports() {
         </div>
       </div>
 
+      {/* Sub-report tabs */}
+      <div className="flex gap-1 mb-5 border-b border-stone-100">
+        {[['sales', 'Sale report'], ['summary', 'Order summary'], ['items', 'Item-wise']].map(([k, label]) => (
+          <button key={k} onClick={() => setReportTab(k)}
+            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${reportTab === k ? 'border-brand-500 text-brand-600' : 'border-transparent text-stone-500 hover:text-stone-700'}`}>{label}</button>
+        ))}
+      </div>
+
+      {reportTab === 'sales' && (<>
       {/* Bill lookup */}
       <div className="card p-3 mb-5 flex items-center gap-2">
         <Receipt size={16} className="text-stone-400" />
@@ -305,6 +359,79 @@ export default function AdminReports() {
           </div>
         </div>
       </div>
+      </>)}
+
+      {/* Order summary sub-report */}
+      {reportTab === 'summary' && (
+        <div className="space-y-5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[['Total sales', `₹${tot.grand.toFixed(0)}`], ['Orders', sales.length], ['Avg order value', `₹${avgOrder.toFixed(0)}`], ['Cancelled', statusCounts.cancelled || 0]].map(([l, v]) => (
+              <div key={l} className="card p-4"><div className="text-xs text-stone-400">{l}</div><div className="text-2xl font-semibold text-stone-900 mt-1">{v}</div></div>
+            ))}
+          </div>
+          <div className="grid md:grid-cols-2 gap-5">
+            <div className="card p-4">
+              <div className="text-xs font-semibold text-stone-400 uppercase mb-3">By order type</div>
+              <div className="space-y-1.5 text-sm">
+                {typeSummary.map(x => (
+                  <div key={x.label} className="flex justify-between"><span className="text-stone-600">{x.label} <span className="text-stone-400">· {x.count}</span></span><span className="font-medium">₹{x.amount.toFixed(0)}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="card p-4">
+              <div className="text-xs font-semibold text-stone-400 uppercase mb-3">By payment mode</div>
+              <div className="space-y-1.5 text-sm">
+                {paySummary.length === 0 ? <div className="text-stone-400">—</div> : paySummary.map(x => (
+                  <div key={x.label} className="flex justify-between"><span className="text-stone-600">{x.label} <span className="text-stone-400">· {x.count}</span></span><span className="font-medium">₹{x.amount.toFixed(0)}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="card p-4">
+              <div className="text-xs font-semibold text-stone-400 uppercase mb-3">By status</div>
+              <div className="space-y-1.5 text-sm">
+                {Object.keys(statusCounts).length === 0 ? <div className="text-stone-400">—</div> : Object.entries(statusCounts).map(([s, n]) => (
+                  <div key={s} className="flex justify-between"><span className="text-stone-600 capitalize">{s.replace(/_/g, ' ')}</span><span className="font-medium">{n}</span></div>
+                ))}
+              </div>
+            </div>
+            <div className="card p-4">
+              <div className="text-xs font-semibold text-stone-400 uppercase mb-3">Settlement</div>
+              <div className="space-y-1.5 text-sm">
+                <div className="flex justify-between"><span className="text-stone-600">Settled bills</span><span className="font-medium">{sales.filter(r => r.settled).length}</span></div>
+                <div className="flex justify-between"><span className="text-red-600">Unsettled bills</span><span className="font-medium text-red-600">{unsettledList.length}</span></div>
+                <div className="flex justify-between"><span className="text-red-600">Amount due</span><span className="font-semibold text-red-600">₹{unsettledAmt.toFixed(0)}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item-wise sub-report */}
+      {reportTab === 'items' && (
+        <div className="card overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-stone-50 text-stone-500 text-left">
+              <tr><th className="px-4 py-2 font-medium">Item</th><th className="px-4 py-2 font-medium text-right">Qty sold</th><th className="px-4 py-2 font-medium text-right">Amount</th></tr>
+            </thead>
+            <tbody>
+              {isLoading ? <tr><td colSpan={3} className="text-center py-8 text-stone-400">Loading…</td></tr>
+                : itemRows.length === 0 ? <tr><td colSpan={3} className="text-center py-8 text-stone-400">No items in this period</td></tr>
+                : itemRows.map(r => (
+                  <tr key={r.name} className="border-t border-stone-50">
+                    <td className="px-4 py-2 text-stone-700">{r.name}</td>
+                    <td className="px-4 py-2 text-right font-medium">{r.qty}</td>
+                    <td className="px-4 py-2 text-right">₹{r.amount.toFixed(0)}</td>
+                  </tr>
+                ))}
+            </tbody>
+            {itemRows.length > 0 && (
+              <tfoot className="bg-stone-50 font-semibold">
+                <tr><td className="px-4 py-2">Total ({itemRows.length} items)</td><td className="px-4 py-2 text-right">{itemTotals.qty}</td><td className="px-4 py-2 text-right">₹{itemTotals.amount.toFixed(0)}</td></tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      )}
 
       {/* View tax invoice modal (on-screen, view-only) */}
       {viewOrder && (
