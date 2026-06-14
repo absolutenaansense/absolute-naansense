@@ -5,12 +5,14 @@ import AdminReservations from '../pages/admin/AdminReservations'
 import AdminReports from '../pages/admin/AdminReports'
 import KotManager from '../components/admin/KotManager'
 import SaleSummary from '../components/admin/SaleSummary'
+import OrderAlerts from '../components/admin/OrderAlerts'
 
 // Operational billing app for one outlet: online orders, dine-in POS, reservations,
 // plus a read-only day-end sales report (scoped to this outlet).
 export default function BillerApp() {
   return (
     <>
+      <OrderAlerts />
       <KotManager />
       <SaleSummary />
       <Routes>

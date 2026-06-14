@@ -1,6 +1,5 @@
-import { useState, useEffect, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '../../services/supabase'
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer, Receipt, MessageCircle } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
@@ -11,7 +10,6 @@ import { sendKotWhatsApp } from '../../utils/whatsappKot'
 import AdminLayout from '../../components/admin/AdminLayout'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 import { useStaff } from '../../staff/StaffContext'
-import { playRing, notify, requestNotifyPermission, armAudio } from '../../utils/notify'
 import { ordersApi } from '../../services/api'
 
 // Active work-queue statuses (awaiting confirmation → out for delivery). Delivered
@@ -283,64 +281,20 @@ export default function AdminOrders() {
   const staff = useStaff()
   const outlet = staff?.outlet || 'renukoot'
   const [now, setNow] = useState(Date.now())
-  const printedRef = useRef(new Set())
-  const alertedRef = useRef(new Set())
-  const queryClient = useQueryClient()
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
 
-  // Enable sound + browser notifications for new orders awaiting confirmation.
-  useEffect(() => { armAudio(); requestNotifyPermission() }, [])
-
+  // New-order alerts + KOT auto-print run app-wide in <OrderAlerts/> (BillerApp),
+  // so they fire on any screen. Here we just poll the queue fast during open hours.
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-orders'],
     queryFn: () => ordersApi.allOrders().then(r => r.data),
-    refetchInterval: 15000, // auto-refresh every 15 seconds
+    refetchInterval: () => {
+      const [h, m] = formatIST(new Date().toISOString(), 'HH:mm').split(':').map(Number)
+      const mins = h * 60 + m
+      return (mins >= 600 && mins <= 1410) ? 2000 : 30000 // 10:00 AM–11:30 PM IST → 2s, else 30s
+    },
   })
-
-  // Auto-print the KOT when a new ONLINE order lands (keep this screen open at the counter).
-  // POS dine-in/take-away orders print their KOT on the POS device, so they're skipped here.
-  useEffect(() => {
-    // Ring + notify when an order enters this outlet's "awaiting confirmation" queue.
-    const alertPending = (row) => {
-      if ((row.outlet || 'renukoot') !== outlet || row.tableLabel) return
-      if (row.status !== 'payment_received') return
-      if (alertedRef.current.has(row.id)) return
-      alertedRef.current.add(row.id)
-      playRing()
-      notify('New order — needs confirmation', `#${String(row.id).slice(0, 8).toUpperCase()} · ₹${parseFloat(row.total).toFixed(0)}`, `${import.meta.env.BASE_URL}logo.jpg`)
-    }
-
-    const channel = supabase
-      .channel('admin-new-orders')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Order' }, (payload) => {
-        const row = payload.new
-        // Only this outlet's fresh customer orders. POS orders are created already
-        // 'preparing' (or with a table) and print on the POS device.
-        if ((!row.outlet || row.outlet === outlet) && !row.tableLabel && ['payment_received', 'pending'].includes(row.status) && !printedRef.current.has(row.id)) {
-          printedRef.current.add(row.id)
-          // Items are inserted just after the order row — wait briefly, then fetch + print.
-          setTimeout(async () => {
-            try {
-              const { data } = await ordersApi.getOrder(row.id)
-              if (data?.items?.length) printTicket({ ...data, kotNo: data.items[0]?.kotNo }, { title: 'KOT', showPrices: false })
-            } catch { /* ignore */ }
-            refetch()
-          }, 1800)
-        }
-        alertPending(row)
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'Order' }, (payload) => {
-        const row = payload.new, prev = payload.old
-        // Online orders flip to payment_received when paid (e.g. via Cashfree).
-        if (row.status === 'payment_received' && prev?.status !== 'payment_received') {
-          alertPending(row)
-          refetch()
-        }
-      })
-      .subscribe()
-    return () => supabase.removeChannel(channel)
-  }, [refetch, outlet])
 
   // Live queue: this outlet's online (delivery + takeaway) orders that still need
   // handling — from awaiting confirmation through out-for-delivery. Delivered &
