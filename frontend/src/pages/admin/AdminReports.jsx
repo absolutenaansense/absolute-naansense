@@ -189,29 +189,36 @@ export default function AdminReports() {
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={10} className="text-center py-8 text-stone-400">Loading…</td></tr>
-              ) : sales.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-8 text-stone-400">No sales in this period</td></tr>
-              ) : sales.map(r => (
-                <tr key={r.id} className="border-t border-stone-50">
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={10} className="text-center py-8 text-stone-400">No orders in this period</td></tr>
+              ) : rows.map(r => {
+                const isCancelled = r.status === 'cancelled'
+                return (
+                <tr key={r.id} className={`border-t border-stone-50 ${isCancelled ? 'bg-red-50/40' : ''}`}>
                   <td className="px-3 py-2 font-mono">{r.billNo ?? '—'}</td>
                   <td className="px-3 py-2 whitespace-nowrap text-stone-500">{formatIST(r.createdAt, 'dd MMM, h:mm a')}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{typeLabel(r.meta)}</td>
                   <td className="px-3 py-2">{payLabel(r)}</td>
-                  <td className="px-3 py-2"><span className={r.paymentStatus === 'paid' ? 'text-green-600' : 'text-amber-600'}>{r.paymentStatus}</span></td>
-                  <td className="px-3 py-2">₹{r.subtotal.toFixed(2)}</td>
-                  <td className="px-3 py-2">₹{r.cgst.toFixed(2)}</td>
-                  <td className="px-3 py-2">₹{r.sgst.toFixed(2)}</td>
-                  <td className="px-3 py-2 font-semibold">₹{r.grand.toFixed(2)}</td>
+                  <td className="px-3 py-2">
+                    {isCancelled
+                      ? <span className="text-red-600 font-medium">cancelled</span>
+                      : <span className={r.paymentStatus === 'paid' ? 'text-green-600' : 'text-amber-600'}>{r.paymentStatus}</span>}
+                  </td>
+                  <td className={`px-3 py-2 ${isCancelled ? 'line-through text-stone-400' : ''}`}>₹{r.subtotal.toFixed(2)}</td>
+                  <td className={`px-3 py-2 ${isCancelled ? 'line-through text-stone-400' : ''}`}>₹{r.cgst.toFixed(2)}</td>
+                  <td className={`px-3 py-2 ${isCancelled ? 'line-through text-stone-400' : ''}`}>₹{r.sgst.toFixed(2)}</td>
+                  <td className={`px-3 py-2 font-semibold ${isCancelled ? 'line-through text-stone-400' : ''}`}>₹{r.grand.toFixed(2)}</td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-1">
                       <button onClick={() => setViewOrder(r)} title="View" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Eye size={14} /></button>
                       <button onClick={() => printBill(r)} title="Print" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Printer size={14} /></button>
-                      <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>
-                      {!isBiller && <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>}
+                      {!isCancelled && <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>}
+                      {!isBiller && !isCancelled && <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>}
                     </div>
                   </td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
             {sales.length > 0 && (
               <tfoot className="bg-stone-50 font-semibold">
