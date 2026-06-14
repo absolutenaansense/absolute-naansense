@@ -8,7 +8,7 @@ import { ordersApi } from '../../services/api'
 import { printTicket } from '../../utils/printKot'
 import { getOrderMeta, itemNote } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
-import { playRing, notify, requestNotifyPermission, armAudio, flashTitle, isAway } from '../../utils/notify'
+import { playRing, notify, requestNotifyPermission, armAudio, flashTitle, isAway, unlockAudio, audioReady } from '../../utils/notify'
 
 // Mounted once per biller app. When a new online order lands (any screen), it
 // rings + raises a Chrome notification AND pops a center-screen confirm dialog
@@ -22,18 +22,19 @@ export default function OrderAlerts() {
   const [busy, setBusy] = useState(false)
   const [cancelMode, setCancelMode] = useState(false)   // remark field revealed
   const [cancelRemark, setCancelRemark] = useState('')
+  const [soundReady, setSoundReady] = useState(audioReady())   // audio unlocked this session?
+  const ringTimer = useRef(null)
 
   useEffect(() => { armAudio(); requestNotifyPermission() }, [])
 
   const mine = (row) => (row.outlet || 'renukoot') === outlet && !row.tableLabel
 
-  // Ring + notify + queue the order for the confirm popup (once per order).
+  // Notify + flash + queue the order for the confirm popup (once per order). The
+  // ring is driven by a separate loop while any order is pending (see below).
   const raise = async (row) => {
     if (!mine(row) || row.status !== 'payment_received' || seen.current.has(row.id)) return
     seen.current.add(row.id)
     const away = isAway()                       // biller not looking at the tab?
-    playRing()
-    if (away) setTimeout(playRing, 1500)        // ring twice when away
     notify('🔔 New online order — confirm now', `#${String(row.id).slice(0, 8).toUpperCase()} · ₹${parseFloat(row.total).toFixed(0)}`, `${import.meta.env.BASE_URL}logo.jpg`, away)
     if (away) flashTitle('🔔 NEW ORDER!')
     qc.invalidateQueries({ queryKey: ['admin-orders'] })
@@ -68,6 +69,23 @@ export default function OrderAlerts() {
   const current = queue[0]
   const drop = (id) => { setQueue(q => q.filter(o => o.id !== id)); setCancelMode(false); setCancelRemark('') }
 
+  // Ring continuously while an order awaits a decision — impossible to miss.
+  // Stops the instant the queue clears.
+  useEffect(() => {
+    const stop = () => { if (ringTimer.current) { clearInterval(ringTimer.current); ringTimer.current = null } }
+    if (current) { playRing(); stop(); ringTimer.current = setInterval(playRing, 3000) } else stop()
+    return stop
+  }, [current?.id])
+
+  // Explicit one-click unlock for sound + notifications (browsers require a gesture).
+  const enableAlerts = () => {
+    unlockAudio()
+    requestNotifyPermission()
+    setSoundReady(true)
+    playRing()
+    notify('Alerts enabled', "You'll be alerted on new online orders.", `${import.meta.env.BASE_URL}logo.jpg`)
+  }
+
   const doConfirm = async () => {
     if (!current) return
     setBusy(true)
@@ -92,15 +110,22 @@ export default function OrderAlerts() {
     } catch { toast.error('Failed to cancel') } finally { setBusy(false) }
   }
 
-  if (!current) return null
-  const o = current
-  const meta = getOrderMeta(o)
-  const subtotal = (o.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
-  const gst = Math.round(subtotal * 0.05)
-  const delivery = Math.max(0, Math.round(parseFloat(o.total) - subtotal - gst))
-  const where = meta.type === 'TAKEAWAY' ? 'Take Away' : meta.type === 'DINE_IN' ? `Dine-in ${meta.table || ''}` : 'Delivery'
-
   return (
+    <>
+      {!soundReady && (
+        <button onClick={enableAlerts}
+          className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[90] bg-amber-500 hover:bg-amber-600 text-white text-sm font-semibold px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 animate-pulse">
+          🔔 Enable order alerts — click once
+        </button>
+      )}
+      {current && (() => {
+        const o = current
+        const meta = getOrderMeta(o)
+        const subtotal = (o.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
+        const gst = Math.round(subtotal * 0.05)
+        const delivery = Math.max(0, Math.round(parseFloat(o.total) - subtotal - gst))
+        const where = meta.type === 'TAKEAWAY' ? 'Take Away' : meta.type === 'DINE_IN' ? `Dine-in ${meta.table || ''}` : 'Delivery'
+        return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[92vh] flex flex-col">
         <div className="px-5 py-4 border-b border-stone-100 bg-amber-50 rounded-t-2xl">
@@ -168,5 +193,8 @@ export default function OrderAlerts() {
         </div>
       </div>
     </div>
+        )
+      })()}
+    </>
   )
 }

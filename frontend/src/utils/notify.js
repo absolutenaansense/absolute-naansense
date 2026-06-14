@@ -11,7 +11,21 @@ function ctx() {
   return audioCtx
 }
 
-function beep(ac, start, dur, freq, vol = 0.25) {
+// Unlock + verify audio from an explicit user gesture (a button click). Returns
+// true if the AudioContext is running. Browsers only allow this from a gesture.
+export function unlockAudio() {
+  const ac = ctx()
+  if (!ac) return false
+  try { ac.resume() } catch {}
+  primed = true
+  return ac.state === 'running'
+}
+
+export function audioReady() {
+  return primed && audioCtx && audioCtx.state === 'running'
+}
+
+function beep(ac, start, dur, freq, vol = 0.45) {
   const o = ac.createOscillator()
   const g = ac.createGain()
   o.type = 'sine'
