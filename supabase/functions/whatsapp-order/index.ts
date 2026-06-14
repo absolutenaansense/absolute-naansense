@@ -55,24 +55,30 @@ Deno.serve(async (req) => {
     if (error || !order) return json({ error: 'Order not found' }, 404)
     if (order.tableLabel) return json({ skipped: 'POS order' }) // online only
 
-    const body = {
-      messaging_product: 'whatsapp',
-      to: TO,
-      type: 'template',
-      template: {
-        name: TEMPLATE,
-        language: { code: TEMPLATE_LANG },
-        components: [{ type: 'body', parameters: [{ type: 'text', text: summarize(order) }] }],
-      },
-    }
-    const res = await fetch(`${GRAPH}/${PHONE_ID}/messages`, {
+    const text = summarize(order)
+    const send = (payload: unknown) => fetch(`${GRAPH}/${PHONE_ID}/messages`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(payload),
     })
-    const data = await res.json()
+
+    // Prefer the approved template (works any time). If it's not available yet
+    // (still pending Meta approval -> 132001/132000/132015), fall back to a
+    // plain-text message, which delivers when a 24h chat window with the
+    // recipient is open.
+    let res = await send({
+      messaging_product: 'whatsapp', to: TO, type: 'template',
+      template: { name: TEMPLATE, language: { code: TEMPLATE_LANG }, components: [{ type: 'body', parameters: [{ type: 'text', text }] }] },
+    })
+    let data = await res.json()
+    let via = 'template'
+    if (!res.ok && [132000, 132001, 132015, 132007].includes(data?.error?.code)) {
+      res = await send({ messaging_product: 'whatsapp', to: TO, type: 'text', text: { body: `🔔 New online order\n\n${text}\n\n— Absolute Naansense` } })
+      data = await res.json()
+      via = 'text'
+    }
     if (!res.ok) return json({ error: 'WhatsApp send failed', details: data }, 400)
-    return json({ sent: true, id: data.messages?.[0]?.id })
+    return json({ sent: true, via, id: data.messages?.[0]?.id })
   } catch (e) {
     return json({ error: String(e) }, 500)
   }
