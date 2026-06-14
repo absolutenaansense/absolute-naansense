@@ -29,11 +29,10 @@ function CustomerRoute({ children }) {
 const HOST = (typeof window !== 'undefined' ? window.location.hostname : '').toLowerCase()
 const IS_IN = HOST.endsWith('absolutenaansense.in')
 const IS_COM = HOST.endsWith('absolutenaansense.com')
-// On .in only staff is served. Customer is served everywhere except .in.
+// Domain split now live: customers on .com, staff on .in.
+//  .com → customer only   |   .in → staff only   |   other hosts → both (dev/preview)
 const CUSTOMER_ENABLED = !IS_IN
-// Staff is served everywhere for now (login-gated). Once absolutenaansense.in is
-// live, change this to `!IS_COM` to make absolutenaansense.com customer-only.
-const STAFF_ENABLED = true
+const STAFF_ENABLED = !IS_COM
 
 export default function App() {
   return (
