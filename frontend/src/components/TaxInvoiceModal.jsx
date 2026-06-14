@@ -2,7 +2,7 @@ import { X, Printer } from 'lucide-react'
 import { formatIST } from '../utils/dateIST'
 import { getOrderMeta } from '../utils/orderNotes'
 import { printBill } from '../utils/printKot'
-import { RESTAURANT, CGST_RATE, SGST_RATE } from '../config/restaurant'
+import { restaurantFor, CGST_RATE, SGST_RATE } from '../config/restaurant'
 
 const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
@@ -12,6 +12,7 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
   if (!order) return null
 
   const meta = getOrderMeta(order)
+  const R = restaurantFor(meta.outlet)   // outlet-specific name/address/GSTIN/FSSAI
   const items = order.items || []
   const type = (meta.type || '').toUpperCase()
   const heading = type === 'DINE_IN' ? `Dine In: ${meta.table || ''}` : (type === 'TAKEAWAY' ? 'Take Away' : 'Delivery')
@@ -59,11 +60,11 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
             </div>
           )}
           <div className="text-center">
-            <div className="text-base font-bold">{RESTAURANT.name}</div>
-            <div className="text-xs">{RESTAURANT.address}</div>
-            <div className="text-xs">GSTIN No - {RESTAURANT.gstin}</div>
-            <div className="text-xs">FSSAI Lic No - {RESTAURANT.fssai}</div>
-            <div className="text-xs">Mobile - {RESTAURANT.mobile}</div>
+            <div className="text-base font-bold">{R.name}</div>
+            <div className="text-xs">{R.address}</div>
+            <div className="text-xs">Mobile - {R.mobile}</div>
+            <div className="text-xs">GSTIN No - {R.gstin}</div>
+            <div className="text-xs">FSSAI Lic No - {R.fssai}</div>
           </div>
 
           <div className="border-t border-dashed border-stone-300 my-2" />
@@ -71,7 +72,6 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
           <div className="border-t border-dashed border-stone-300 my-2" />
 
           <div className="text-stone-500">Displayed on {displayedAt} IST</div>
-          {meta.outlet && <div>Outlet: {meta.outlet === 'renusagar' ? 'Renusagar' : 'Renukoot'}</div>}
           <div>Name: {custName}</div>
           {custPhone && <div>Phone: {custPhone}</div>}
           {meta.address && <div>Address: {meta.address}</div>}
@@ -80,7 +80,7 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
             <span>{heading}</span>
           </div>
           <div className="flex justify-between">
-            <span>Cashier: {RESTAURANT.cashier}</span>
+            <span>Cashier: {R.cashier}</span>
             <span>Bill No.: {order.billNo ?? '-'}</span>
           </div>
 
@@ -124,7 +124,7 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
           <div>Paid via {paid}</div>
           {cancelled && <div className="text-red-600 font-bold">Status: CANCELLED</div>}
           <div className="border-t border-dashed border-stone-300 my-2" />
-          <div className="text-center">{RESTAURANT.footer}</div>
+          <div className="text-center">{R.footer}</div>
         </div>
 
         <div className="px-4 py-3 border-t border-stone-100 flex gap-2">

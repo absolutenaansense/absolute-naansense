@@ -1,6 +1,6 @@
 import { formatIST } from './dateIST'
 import { getOrderMeta, itemNote } from './orderNotes'
-import { RESTAURANT, CGST_RATE, SGST_RATE } from '../config/restaurant'
+import { restaurantFor, CGST_RATE, SGST_RATE } from '../config/restaurant'
 
 // KOT item ordering: Starters > Main Course > Accompaniments > Desserts >
 // Beverages > Mocktails. Ranked by the item's category name (keyword based —
@@ -145,6 +145,7 @@ export function printKot(order, opts = {}) {
 // Full GST tax invoice (customer bill), matching the restaurant's printed format.
 export function printBill(order) {
   const meta = getOrderMeta(order)
+  const R = restaurantFor(meta.outlet)   // outlet-specific name/address/GSTIN/FSSAI
   const items = order.items || []
   const type = (meta.type || '').toUpperCase()
   const heading = type === 'DINE_IN' ? `Dine In: ${meta.table || ''}` : (type === 'TAKEAWAY' ? 'Take Away' : 'Delivery')
@@ -194,21 +195,20 @@ export function printBill(order) {
     .grand { font-size: 19px; font-weight: bold; }
     .doctitle { font-size: 16px; font-weight: bold; letter-spacing: 1px; margin: 4px 0; }
   </style></head><body>
-    <div class="c name">${esc(RESTAURANT.name)}</div>
-    <div class="c">${esc(RESTAURANT.address)}</div>
-    <div class="c">GSTIN No - ${esc(RESTAURANT.gstin)}</div>
-    <div class="c">FSSAI Lic No - ${esc(RESTAURANT.fssai)}</div>
-    <div class="c">Mobile - ${esc(RESTAURANT.mobile)}</div>
+    <div class="c name">${esc(R.name)}</div>
+    <div class="c">${esc(R.address)}</div>
+    <div class="c">Mobile - ${esc(R.mobile)}</div>
+    <div class="c">GSTIN No - ${esc(R.gstin)}</div>
+    <div class="c">FSSAI Lic No - ${esc(R.fssai)}</div>
     <div class="hr"></div>
     <div class="c doctitle">TAX INVOICE</div>
     <div class="hr"></div>
     <div>Displayed on ${esc(displayedAt)} IST</div>
-    ${meta.outlet ? `<div>Outlet: ${esc(meta.outlet === 'renusagar' ? 'Renusagar' : 'Renukoot')}</div>` : ''}
     <div>Name: ${esc(custName)}</div>
     ${custPhone ? `<div>Phone: ${esc(custPhone)}</div>` : ''}
     ${meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}
     <div class="row"><span>Date: ${esc(formatIST(order.createdAt || new Date().toISOString(), 'dd/MM/yy HH:mm'))}</span><span>${esc(heading)}</span></div>
-    <div class="row"><span>Cashier: ${esc(RESTAURANT.cashier)}</span><span>Bill No.: ${order.billNo ?? '-'}</span></div>
+    <div class="row"><span>Cashier: ${esc(R.cashier)}</span><span>Bill No.: ${order.billNo ?? '-'}</span></div>
     <div class="hr"></div>
     <table>
       <thead><tr><th>No.</th><th>Item</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Amount</th></tr></thead>
@@ -225,7 +225,7 @@ export function printBill(order) {
     <div class="hr"></div>
     <div>Paid via ${esc(paid)}</div>
     <div class="hr"></div>
-    <div class="c">${esc(RESTAURANT.footer)}</div>
+    <div class="c">${esc(R.footer)}</div>
   </body></html>`
 
   printHtml(html)
