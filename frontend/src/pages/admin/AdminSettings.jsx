@@ -1,11 +1,24 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { CheckCircle2, XCircle, Loader2, Plug } from 'lucide-react'
+import { CheckCircle2, XCircle, Loader2, Plug, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
-import { adminApi } from '../../services/api'
+import { adminApi, authApi } from '../../services/api'
+import { useAuthStore } from '../../store/authStore'
 
 export default function AdminSettings() {
+  const { admin } = useAuthStore()
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
+  const [pwSaving, setPwSaving] = useState(false)
+
+  const changePassword = async () => {
+    if (pw.next.length < 6) { toast.error('New password must be at least 6 characters'); return }
+    if (pw.next !== pw.confirm) { toast.error('New passwords do not match'); return }
+    setPwSaving(true)
+    try {
+      await authApi.adminChangePassword({ adminId: admin.id, currentPassword: pw.current, newPassword: pw.next })
+      toast.success('Password changed'); setPw({ current: '', next: '', confirm: '' })
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to change password') } finally { setPwSaving(false) }
+  }
   const [petpoojaStatus, setPetpoojaStatus] = useState(null) // null | 'testing' | 'ok' | 'fail'
   const [petpoojaConfig, setPetpoojaConfig] = useState({
     appKey: '',
@@ -34,6 +47,23 @@ export default function AdminSettings() {
   return (
     <AdminLayout title="Settings">
       <div className="max-w-xl space-y-5">
+
+        {/* Change password */}
+        <div className="card p-5">
+          <div className="flex items-center gap-2 mb-1">
+            <Lock size={16} className="text-brand-500" />
+            <h3 className="text-sm font-semibold text-stone-800">Change password</h3>
+          </div>
+          <p className="text-xs text-stone-400 mb-4">{admin?.email}</p>
+          <div className="space-y-3 mb-4">
+            <div><label className="label">Current password</label><input className="input" type="password" value={pw.current} onChange={e => setPw(p => ({ ...p, current: e.target.value }))} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="label">New password</label><input className="input" type="password" placeholder="Min 6 chars" value={pw.next} onChange={e => setPw(p => ({ ...p, next: e.target.value }))} /></div>
+              <div><label className="label">Confirm</label><input className="input" type="password" value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} /></div>
+            </div>
+          </div>
+          <button onClick={changePassword} disabled={pwSaving} className="btn-primary text-sm">{pwSaving ? 'Saving…' : 'Update password'}</button>
+        </div>
 
         {/* PetPooja */}
         <div className="card p-5">

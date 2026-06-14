@@ -677,8 +677,6 @@ export default function CheckoutPage() {
               )}
 
               <PayAheadQR amount={paidTotal} />
-
-              <button onClick={() => navigate('/orders')} className="btn-secondary w-full justify-center">View my orders</button>
             </>
           )}
 

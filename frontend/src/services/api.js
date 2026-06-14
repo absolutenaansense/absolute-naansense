@@ -75,6 +75,45 @@ export const authApi = {
     return { data }
   },
 
+  // Change password for a logged-in customer (verify current password first).
+  changePassword: async ({ userId, currentPassword, newPassword }) => {
+    const { data: user, error } = await supabase.from('User').select('passwordHash').eq('id', userId).single()
+    if (error || !user) throw { response: { data: { error: 'User not found' } } }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash)
+    if (!ok) throw { response: { data: { error: 'Current password is incorrect' } } }
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const { error: uErr } = await supabase.from('User').update({ passwordHash, updatedAt: new Date().toISOString() }).eq('id', userId)
+    if (uErr) throw { response: { data: { error: uErr.message } } }
+    return { data: { success: true } }
+  },
+
+  // Forgot password: verify identity by registered phone + email, then set a new
+  // password. (No SMS/email OTP infra, so phone+email match is the check.)
+  resetPassword: async ({ phone, email, newPassword }) => {
+    const { data: user } = await supabase.from('User').select('id, email').eq('phone', phone).maybeSingle()
+    if (!user) throw { response: { data: { error: 'No account found with that mobile number' } } }
+    if (!user.email) throw { response: { data: { error: 'This account has no email on file — please contact us to reset.' } } }
+    if (user.email.trim().toLowerCase() !== (email || '').trim().toLowerCase()) {
+      throw { response: { data: { error: 'Email does not match our records for this number.' } } }
+    }
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const { error: uErr } = await supabase.from('User').update({ passwordHash, updatedAt: new Date().toISOString() }).eq('id', user.id)
+    if (uErr) throw { response: { data: { error: uErr.message } } }
+    return { data: { success: true } }
+  },
+
+  // Change password for a logged-in staff/admin account.
+  adminChangePassword: async ({ adminId, currentPassword, newPassword }) => {
+    const { data: admin, error } = await supabase.from('Admin').select('passwordHash').eq('id', adminId).single()
+    if (error || !admin) throw { response: { data: { error: 'Account not found' } } }
+    const ok = await bcrypt.compare(currentPassword, admin.passwordHash)
+    if (!ok) throw { response: { data: { error: 'Current password is incorrect' } } }
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const { error: uErr } = await supabase.from('Admin').update({ passwordHash, updatedAt: new Date().toISOString() }).eq('id', adminId)
+    if (uErr) throw { response: { data: { error: uErr.message } } }
+    return { data: { success: true } }
+  },
+
   // DPDP Act 2023 — right to erasure. Removes the customer's personal data.
   // Saved addresses are deleted outright. The User record is hard-deleted when
   // possible; if past orders (retained for tax/legal compliance) block the

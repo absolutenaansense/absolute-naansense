@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { User, MapPin, Plus, Trash2, LogOut, Phone, Mail, Shield, AlertTriangle } from 'lucide-react'
+import { User, MapPin, Plus, Trash2, LogOut, Phone, Mail, Shield, AlertTriangle, Lock, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { Link, useNavigate } from 'react-router-dom'
 import CustomerLayout from '../../components/customer/CustomerLayout'
@@ -14,6 +14,19 @@ export default function ProfilePage() {
   const [newAddr, setNewAddr] = useState({ label: 'Home', line1: '', line2: '', city: '', pincode: '' })
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
+
+  const handleChangePassword = async () => {
+    if (pw.next.length < 6) { toast.error('New password must be at least 6 characters'); return }
+    if (pw.next !== pw.confirm) { toast.error('New passwords do not match'); return }
+    setPwSaving(true)
+    try {
+      await authApi.changePassword({ userId: user.id, currentPassword: pw.current, newPassword: pw.next })
+      toast.success('Password changed'); setPwOpen(false); setPw({ current: '', next: '', confirm: '' })
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to change password') } finally { setPwSaving(false) }
+  }
 
   const { data: addresses = [], refetch } = useQuery({
     queryKey: ['addresses', user?.id],
@@ -84,6 +97,9 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+          <button onClick={() => setPwOpen(true)} className="btn-secondary w-full justify-center mt-4 text-sm">
+            <Lock size={15} /> Change password
+          </button>
         </div>
 
         {/* Addresses */}
@@ -182,6 +198,26 @@ export default function ProfilePage() {
       </div>
 
       {/* Delete account confirmation */}
+      {pwOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => !pwSaving && setPwOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-stone-900">Change password</h3>
+              <button onClick={() => setPwOpen(false)} className="p-1.5 text-stone-400 hover:text-stone-700"><X size={18} /></button>
+            </div>
+            <div className="space-y-3">
+              <div><label className="label">Current password</label><input className="input" type="password" value={pw.current} onChange={e => setPw(p => ({ ...p, current: e.target.value }))} /></div>
+              <div><label className="label">New password</label><input className="input" type="password" placeholder="Min 6 chars" value={pw.next} onChange={e => setPw(p => ({ ...p, next: e.target.value }))} /></div>
+              <div><label className="label">Confirm new password</label><input className="input" type="password" value={pw.confirm} onChange={e => setPw(p => ({ ...p, confirm: e.target.value }))} /></div>
+            </div>
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setPwOpen(false)} disabled={pwSaving} className="btn-secondary flex-1 justify-center">Cancel</button>
+              <button onClick={handleChangePassword} disabled={pwSaving} className="btn-primary flex-1 justify-center">{pwSaving ? 'Saving…' : 'Update'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {deleteOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => !deleting && setDeleteOpen(false)}>
           <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-5" onClick={e => e.stopPropagation()}>

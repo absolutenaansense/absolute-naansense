@@ -4,6 +4,7 @@ import { useAuthStore } from './store/authStore'
 // Customer pages
 import LoginPage from './pages/customer/LoginPage'
 import RegisterPage from './pages/customer/RegisterPage'
+import ForgotPasswordPage from './pages/customer/ForgotPasswordPage'
 import OutletSelectPage from './pages/customer/OutletSelectPage'
 import MenuPage from './pages/customer/MenuPage'
 import CheckoutPage from './pages/customer/CheckoutPage'
@@ -48,6 +49,7 @@ export default function App() {
         <>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/contact" element={<ContactPage />} />

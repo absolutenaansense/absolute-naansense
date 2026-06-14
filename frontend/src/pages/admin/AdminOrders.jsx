@@ -11,6 +11,7 @@ import { sendKotWhatsApp } from '../../utils/whatsappKot'
 import AdminLayout from '../../components/admin/AdminLayout'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 import { useStaff } from '../../staff/StaffContext'
+import { playRing, notify, requestNotifyPermission, armAudio } from '../../utils/notify'
 import { ordersApi } from '../../services/api'
 
 const STATUS_FILTERS = [
@@ -290,9 +291,13 @@ export default function AdminOrders() {
   const [filter, setFilter] = useState('payment_received')
   const [now, setNow] = useState(Date.now())
   const printedRef = useRef(new Set())
+  const alertedRef = useRef(new Set())
   const queryClient = useQueryClient()
 
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t) }, [])
+
+  // Enable sound + browser notifications for new orders awaiting confirmation.
+  useEffect(() => { armAudio(); requestNotifyPermission() }, [])
 
   const { data: orders = [], isLoading, refetch } = useQuery({
     queryKey: ['admin-orders'],
@@ -303,24 +308,42 @@ export default function AdminOrders() {
   // Auto-print the KOT when a new ONLINE order lands (keep this screen open at the counter).
   // POS dine-in/take-away orders print their KOT on the POS device, so they're skipped here.
   useEffect(() => {
+    // Ring + notify when an order enters this outlet's "awaiting confirmation" queue.
+    const alertPending = (row) => {
+      if ((row.outlet || 'renukoot') !== outlet || row.tableLabel) return
+      if (row.status !== 'payment_received') return
+      if (alertedRef.current.has(row.id)) return
+      alertedRef.current.add(row.id)
+      playRing()
+      notify('New order — needs confirmation', `#${String(row.id).slice(0, 8).toUpperCase()} · ₹${parseFloat(row.total).toFixed(0)}`, `${import.meta.env.BASE_URL}logo.jpg`)
+    }
+
     const channel = supabase
       .channel('admin-new-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Order' }, (payload) => {
         const row = payload.new
         // Only this outlet's fresh customer orders. POS orders are created already
         // 'preparing' (or with a table) and print on the POS device.
-        if (row.outlet && row.outlet !== outlet) return
-        if (row.tableLabel || !['payment_received', 'pending'].includes(row.status)) return
-        if (printedRef.current.has(row.id)) return
-        printedRef.current.add(row.id)
-        // Items are inserted just after the order row — wait briefly, then fetch + print.
-        setTimeout(async () => {
-          try {
-            const { data } = await ordersApi.getOrder(row.id)
-            if (data?.items?.length) printTicket({ ...data, kotNo: data.items[0]?.kotNo }, { title: 'KOT', showPrices: false })
-          } catch { /* ignore */ }
+        if ((!row.outlet || row.outlet === outlet) && !row.tableLabel && ['payment_received', 'pending'].includes(row.status) && !printedRef.current.has(row.id)) {
+          printedRef.current.add(row.id)
+          // Items are inserted just after the order row — wait briefly, then fetch + print.
+          setTimeout(async () => {
+            try {
+              const { data } = await ordersApi.getOrder(row.id)
+              if (data?.items?.length) printTicket({ ...data, kotNo: data.items[0]?.kotNo }, { title: 'KOT', showPrices: false })
+            } catch { /* ignore */ }
+            refetch()
+          }, 1800)
+        }
+        alertPending(row)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'Order' }, (payload) => {
+        const row = payload.new, prev = payload.old
+        // Online orders flip to payment_received when paid (e.g. via Cashfree).
+        if (row.status === 'payment_received' && prev?.status !== 'payment_received') {
+          alertPending(row)
           refetch()
-        }, 1800)
+        }
       })
       .subscribe()
     return () => supabase.removeChannel(channel)
