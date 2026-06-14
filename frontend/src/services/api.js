@@ -294,10 +294,13 @@ export const ordersApi = {
     const { data: cur } = await supabase.from('Order').select('billNo, outlet, paymentMethod').eq('id', id).single()
     let billNo = cur?.billNo
     if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no', { p_outlet: cur?.outlet || 'renukoot' }); billNo = bn }
-    const confirmMode = cur?.paymentMethod === 'CASH_ON_DELIVERY' ? 'cash' : 'online'
+    // COD stays UNPAID/unsettled until delivered (cash collected) or manually settled.
+    // Prepaid orders are already paid via Cashfree, so keep them settled.
+    const isCod = cur?.paymentMethod === 'CASH_ON_DELIVERY'
+    const pay = isCod ? { paymentStatus: 'pending', settled: false } : { paymentStatus: 'paid', settled: true, paymentMode: 'online' }
     const { data, error } = await supabase
       .from('Order')
-      .update({ status: 'confirmed', paymentStatus: 'paid', settled: true, paymentMode: confirmMode, billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+      .update({ status: 'confirmed', ...pay, billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()
@@ -339,9 +342,17 @@ export const ordersApi = {
   },
 
   updateStatus: async (id, status) => {
+    const patch = { status, updatedAt: new Date().toISOString() }
+    // Delivering an unpaid (COD) order = cash collected -> settle it as cash.
+    if (status === 'delivered') {
+      const { data: cur } = await supabase.from('Order').select('paymentStatus, total').eq('id', id).single()
+      if (cur && cur.paymentStatus !== 'paid') {
+        Object.assign(patch, { paymentStatus: 'paid', settled: true, paymentMode: 'cash', paidAmount: cur.total })
+      }
+    }
     const { data, error } = await supabase
       .from('Order')
-      .update({ status, updatedAt: new Date().toISOString() })
+      .update(patch)
       .eq('id', id)
       .select()
       .single()
