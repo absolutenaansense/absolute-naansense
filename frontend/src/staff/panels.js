@@ -8,6 +8,8 @@ export const PANELS = {
   renusagar_admin: { key: 'renusagar_admin', kind: 'admin', role: 'outlet_admin', outlet: 'renusagar', title: 'Renusagar Admin', subtitle: 'Renusagar outlet' },
   renukoot_biller: { key: 'renukoot_biller', kind: 'biller', role: 'biller', outlet: 'renukoot', title: 'Renukoot Biller', subtitle: 'Renukoot billing' },
   renusagar_biller: { key: 'renusagar_biller', kind: 'biller', role: 'biller', outlet: 'renusagar', title: 'Renusagar Biller', subtitle: 'Renusagar billing' },
+  renukoot_captain: { key: 'renukoot_captain', kind: 'captain', role: 'captain', outlet: 'renukoot', title: 'Renukoot Captain', subtitle: 'Renukoot table orders' },
+  renusagar_captain: { key: 'renusagar_captain', kind: 'captain', role: 'captain', outlet: 'renusagar', title: 'Renusagar Captain', subtitle: 'Renusagar table orders' },
 }
 
 // Can this logged-in account access this panel?
@@ -21,6 +23,7 @@ export function accountCanAccess(account, panel) {
     if (account.role === 'outlet_admin') return account.outlet === panel.outlet
     return false
   }
+  if (panel.kind === 'captain') return account.role === 'captain' && account.outlet === panel.outlet
   // biller panel
   return account.role === 'biller' && account.outlet === panel.outlet
 }

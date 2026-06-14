@@ -1,6 +1,6 @@
 import { supabase } from './supabase'
 import bcrypt from 'bcryptjs'
-import { withCancelRemark } from '../utils/orderNotes'
+import { withCancelRemark, buildCaptainNotes } from '../utils/orderNotes'
 import { useAuthStore } from '../store/authStore'
 
 // Who is performing the action (the signed-in staff account), for the audit log.
@@ -54,7 +54,7 @@ export const authApi = {
     const { data: admin, error } = await supabase
       .from('Admin')
       .select('*')
-      .eq('email', email)
+      .eq('email', (email || '').trim().toLowerCase())
       .single()
     if (error || !admin) throw { response: { data: { error: 'Invalid credentials' } } }
 
@@ -499,6 +499,69 @@ export const customersApi = {
   },
 }
 
+// --- Staff accounts (super admin manages biller/captain logins per outlet) ---
+export const staffApi = {
+  list: async () => {
+    const { data, error } = await supabase.from('Admin').select('id, email, name, role, outlet, createdAt').order('createdAt', { ascending: true })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: data || [] }
+  },
+  create: async ({ email, name, password, role, outlet }) => {
+    if (!email || !password) throw { response: { data: { error: 'Login ID and password are required' } } }
+    const passwordHash = await bcrypt.hash(password, 10)
+    const { data, error } = await supabase.from('Admin')
+      .insert([{ email: email.trim().toLowerCase(), name: name || null, passwordHash, role, outlet: outlet || null }])
+      .select('id, email, name, role, outlet').single()
+    if (error) throw { response: { data: { error: /duplicate|unique/i.test(error.message) ? 'That login ID already exists' : error.message } } }
+    return { data }
+  },
+  setPassword: async (id, password) => {
+    const passwordHash = await bcrypt.hash(password, 10)
+    const { error } = await supabase.from('Admin').update({ passwordHash, updatedAt: new Date().toISOString() }).eq('id', id)
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { success: true } }
+  },
+  remove: async (id) => {
+    const { error } = await supabase.from('Admin').delete().eq('id', id)
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: { success: true } }
+  },
+}
+
+// --- Captain (tableside ordering) ---
+export const captainApi = {
+  // Captain places a table order -> enters the biller queue as a dine-in order
+  // awaiting confirmation (status 'payment_received'; POS orders use 'preparing',
+  // so this status uniquely flags a captain/online order needing the biller). No
+  // KOT yet — the biller confirms (which prints it).
+  placeOrder: async ({ outlet, table, items, phone, note, captain }) => {
+    const out = outlet || 'renukoot'
+    const userId = await dineApi.ensureWalkInUser()
+    const { total } = totalsFor(items)
+    const { data: order, error } = await supabase.from('Order').insert([{
+      userId, paymentMethod: 'CASH_ON_DELIVERY', total, outlet: out,
+      orderType: 'DINE_IN', tableLabel: table, customerPhone: phone || null,
+      status: 'payment_received', paymentStatus: 'pending', billPrinted: false, isHeld: false,
+      notes: buildCaptainNotes({ text: note, outlet: out, captain }),
+    }]).select().single()
+    if (error) throw { response: { data: { error: error.message } } }
+    const { error: ie } = await supabase.from('OrderItem').insert(itemRows(order.id, items, null))
+    if (ie) throw { response: { data: { error: ie.message } } }
+    return { data: order }
+  },
+  // Biller confirms a captain order: stamp a KOT number on its items and mark it
+  // 'preparing' (a running table). No bill number yet — that's assigned at settle.
+  confirm: async (orderId) => {
+    const { data: ord } = await supabase.from('Order').select('outlet').eq('id', orderId).single()
+    const kotNo = await nextKotNo(ord?.outlet)
+    await supabase.from('OrderItem').update({ kotNo }).eq('orderId', orderId).is('kotNo', null)
+    const { data, error } = await supabase.from('Order').update({ status: 'preparing', updatedAt: new Date().toISOString() }).eq('id', orderId).select(POS_SELECT).single()
+    if (error) throw { response: { data: { error: error.message } } }
+    await logOp(orderId, 'captain_confirm', { kotNo })
+    return { data, kotNo }
+  },
+}
+
 // --- Reports ---
 export const reportsApi = {
   // Orders for the report views (last ~120 days), with item counts/amounts.
@@ -676,7 +739,9 @@ export const dineApi = {
       .select(POS_SELECT)
       .eq('orderType', 'DINE_IN')
       .not('tableLabel', 'is', null)
-      .not('status', 'in', '("delivered","cancelled")')
+      // 'payment_received' = a captain order still awaiting the biller's confirmation;
+      // it shows in the Captain queue, not on the floor, until confirmed (-> 'preparing').
+      .not('status', 'in', '("delivered","cancelled","payment_received")')
       .order('createdAt', { ascending: true })
     if (outlet) q = q.eq('outlet', outlet)
     const { data, error } = await q

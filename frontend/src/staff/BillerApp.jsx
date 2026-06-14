@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import AdminOrders from '../pages/admin/AdminOrders'
+import CaptainQueue from '../pages/admin/CaptainQueue'
 import AdminDineIn from '../pages/admin/AdminDineIn'
 import AdminReservations from '../pages/admin/AdminReservations'
 import AdminReports from '../pages/admin/AdminReports'
@@ -17,6 +18,7 @@ export default function BillerApp() {
       <SaleSummary />
       <Routes>
         <Route index element={<AdminOrders />} />
+        <Route path="captain" element={<CaptainQueue />} />
         <Route path="dine-in" element={<AdminDineIn />} />
         <Route path="reservations" element={<AdminReservations />} />
         <Route path="reports" element={<AdminReports />} />

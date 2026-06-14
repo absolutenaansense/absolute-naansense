@@ -75,7 +75,7 @@ export function printTicket(order, opts = {}) {
     th.qty, td.qty { text-align:right; width: 34px; font-weight: bold; }
     th.pr, td.pr { text-align:right; width: 52px; }
     td.it { font-weight: bold; }
-    .note { font-weight: normal; font-style: italic; font-size: 13px; padding-left: 6px; }
+    .note { font-weight: bold; font-style: normal; font-size: 14px; padding-left: 6px; }
     .tot { margin-top: 4px; }
     .banner { text-align:center; font-size: 21px; font-weight: bold; letter-spacing: 2px; border: 2px solid #000; border-radius: 4px; padding: 3px 0; margin: 5px 0; }
   </style></head><body>

@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Shield, Store, ChevronRight, Clock } from 'lucide-react'
+import { Shield, Store, ChevronRight, ConciergeBell } from 'lucide-react'
 
 const MANAGEMENT = [
   { to: '/super_admin', label: 'Super Admin', desc: 'All outlets · reports & monitoring', icon: Shield },
   { to: '/renukoot_biller', label: 'Renukoot Biller', desc: 'Billing & online orders · Renukoot', icon: Store },
   { to: '/renusagar_biller', label: 'Renusagar Biller', desc: 'Billing & online orders · Renusagar', icon: Store },
+]
+const STAFF = [
+  { to: '/renukoot_captain', label: 'Renukoot Captain', desc: 'Tableside ordering · Renukoot', icon: ConciergeBell },
+  { to: '/renusagar_captain', label: 'Renusagar Captain', desc: 'Tableside ordering · Renusagar', icon: ConciergeBell },
 ]
 
 // Landing page for absolutenaansense.in — choose between management panels and
@@ -38,9 +42,9 @@ export default function StaffLanding() {
           ))}
         </div>
 
-        {tab === 'management' ? (
+        {(
           <div className="space-y-3">
-            {MANAGEMENT.map(({ to, label, desc, icon: Icon }) => (
+            {(tab === 'management' ? MANAGEMENT : STAFF).map(({ to, label, desc, icon: Icon }) => (
               <button
                 key={to}
                 onClick={() => navigate(to)}
@@ -56,12 +60,6 @@ export default function StaffLanding() {
                 <ChevronRight size={18} className="text-stone-500 flex-shrink-0" />
               </button>
             ))}
-          </div>
-        ) : (
-          <div className="bg-stone-800 border border-stone-700 rounded-2xl p-10 text-center">
-            <Clock size={40} className="text-brand-400 mx-auto mb-3" />
-            <div className="text-white font-semibold text-lg">Coming very soon!!</div>
-            <div className="text-stone-400 text-sm mt-1">Stay tuned.</div>
           </div>
         )}
       </div>

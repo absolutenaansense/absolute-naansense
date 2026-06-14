@@ -4,7 +4,7 @@ import toast from 'react-hot-toast'
 import { Check, X } from 'lucide-react'
 import { supabase } from '../../services/supabase'
 import { useStaff } from '../../staff/StaffContext'
-import { ordersApi } from '../../services/api'
+import { ordersApi, captainApi } from '../../services/api'
 import { printTicket } from '../../utils/printKot'
 import { getOrderMeta, itemNote, orderFees } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
@@ -27,7 +27,9 @@ export default function OrderAlerts() {
 
   useEffect(() => { armAudio(); requestNotifyPermission() }, [])
 
-  const mine = (row) => (row.outlet || 'renukoot') === outlet && !row.tableLabel
+  // Online orders (no table) + captain table orders both enter as 'payment_received'
+  // and need the biller's decision. (POS dine-in orders are 'preparing', so excluded.)
+  const mine = (row) => (row.outlet || 'renukoot') === outlet
 
   // Notify + flash + queue the order for the confirm popup (once per order). The
   // ring is driven by a separate loop while any order is pending (see below).
@@ -35,7 +37,7 @@ export default function OrderAlerts() {
     if (!mine(row) || row.status !== 'payment_received' || seen.current.has(row.id)) return
     seen.current.add(row.id)
     const away = isAway()                       // biller not looking at the tab?
-    notify('🔔 New online order — confirm now', `#${String(row.id).slice(0, 8).toUpperCase()} · ₹${parseFloat(row.total).toFixed(0)}`, `${import.meta.env.BASE_URL}logo.jpg`, away)
+    notify(row.tableLabel ? `🔔 Captain order — Table ${row.tableLabel}` : '🔔 New online order — confirm now', `#${String(row.id).slice(0, 8).toUpperCase()} · ₹${parseFloat(row.total).toFixed(0)}`, `${import.meta.env.BASE_URL}logo.jpg`, away)
     if (away) flashTitle('🔔 NEW ORDER!')
     qc.invalidateQueries({ queryKey: ['admin-orders'] })
     try {
@@ -90,9 +92,15 @@ export default function OrderAlerts() {
     if (!current) return
     setBusy(true)
     try {
-      await ordersApi.confirmOrder(current.id)
-      await ordersApi.updateStatus(current.id, 'preparing')
-      printTicket({ ...current, kotNo: current.items?.[0]?.kotNo }, { title: 'KOT', showPrices: false })
+      if (current.tableLabel) {
+        // Captain table order — stamp a KOT, mark the table running (no bill yet).
+        const { data, kotNo } = await captainApi.confirm(current.id)
+        printTicket({ ...data, kotNo }, { title: 'KOT', showPrices: false })
+      } else {
+        await ordersApi.confirmOrder(current.id)
+        await ordersApi.updateStatus(current.id, 'preparing')
+        printTicket({ ...current, kotNo: current.items?.[0]?.kotNo }, { title: 'KOT', showPrices: false })
+      }
       toast.success('Order confirmed — KOT printed')
       qc.invalidateQueries({ queryKey: ['admin-orders'] })
       drop(current.id)
@@ -128,7 +136,7 @@ export default function OrderAlerts() {
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[92vh] flex flex-col">
         <div className="px-5 py-4 border-b border-stone-100 bg-amber-50 rounded-t-2xl">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide animate-pulse">● New online order</span>
+            <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide animate-pulse">● {o.tableLabel ? `New captain order${meta.captain ? ' · ' + meta.captain : ''}` : 'New online order'}</span>
             <div className="flex items-center gap-2">
               {queue.length > 1 && <span className="text-xs text-stone-500">+{queue.length - 1} more</span>}
               <button onClick={() => drop(o.id)} title="Later" className="p-1 text-stone-400 hover:text-stone-700"><X size={16} /></button>

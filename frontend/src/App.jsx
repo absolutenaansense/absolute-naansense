@@ -20,6 +20,7 @@ import FloatingContact from './components/customer/FloatingContact'
 import PanelGate from './staff/PanelGate'
 import AdminMonitorApp from './staff/AdminMonitorApp'
 import BillerApp from './staff/BillerApp'
+import CaptainApp from './staff/CaptainApp'
 import StaffLanding from './staff/StaffLanding'
 
 function CustomerRoute({ children }) {
@@ -73,6 +74,8 @@ export default function App() {
           <Route path="/renusagar_admin/*" element={<PanelGate panelKey="renusagar_admin"><AdminMonitorApp /></PanelGate>} />
           <Route path="/renukoot_biller/*" element={<PanelGate panelKey="renukoot_biller"><BillerApp /></PanelGate>} />
           <Route path="/renusagar_biller/*" element={<PanelGate panelKey="renusagar_biller"><BillerApp /></PanelGate>} />
+          <Route path="/renukoot_captain/*" element={<PanelGate panelKey="renukoot_captain"><CaptainApp /></PanelGate>} />
+          <Route path="/renusagar_captain/*" element={<PanelGate panelKey="renusagar_captain"><CaptainApp /></PanelGate>} />
           <Route path="/admin/*" element={<Navigate to="/super_admin" replace />} />
         </>
       )}

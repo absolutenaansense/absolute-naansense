@@ -15,6 +15,12 @@ export function buildOrderNotes({ type, address, itemNotes }) {
 
 // Customer order notes: the whole-order special request text + the outlet the
 // order was placed for. Stored as JSON in Order.notes.
+// Captain (tableside staff) order notes — tagged so the biller queue can pick them out.
+export function buildCaptainNotes({ text, outlet, captain }) {
+  const t = (text || '').trim()
+  return JSON.stringify({ text: t || null, outlet: outlet || null, source: 'captain', captain: captain || null })
+}
+
 export function buildCustomerNotes({ text, outlet, deliveryFee, convenienceFee, deliveryLabel }) {
   const t = (text || '').trim()
   return JSON.stringify({
@@ -40,6 +46,8 @@ export function getOrderMeta(order) {
     deliveryFee: n.deliveryFee ?? null,
     convenienceFee: n.convenienceFee ?? null,
     deliveryLabel: n.deliveryLabel || null,
+    source: n.source || null,   // 'captain' for tableside-captain orders
+    captain: n.captain || null,
     itemNotes: n.items || {},
   }
 }
@@ -80,7 +88,7 @@ export function parseOrderNotes(notes) {
   try {
     const o = JSON.parse(notes)
     if (o && typeof o === 'object') {
-      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {}, text: o.text ?? null, cancelRemark: o.cancelRemark ?? null, outlet: o.outlet ?? null, deliveryFee: o.deliveryFee ?? null, convenienceFee: o.convenienceFee ?? null, deliveryLabel: o.deliveryLabel ?? null }
+      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {}, text: o.text ?? null, cancelRemark: o.cancelRemark ?? null, outlet: o.outlet ?? null, deliveryFee: o.deliveryFee ?? null, convenienceFee: o.convenienceFee ?? null, deliveryLabel: o.deliveryLabel ?? null, source: o.source ?? null, captain: o.captain ?? null }
     }
   } catch {
     // Legacy plain-text note — surface it as a generic order note.

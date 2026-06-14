@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingBag, Calendar, UtensilsCrossed,
-  Settings, LogOut, Armchair, BarChart3, ExternalLink, Users, Menu, X, ClipboardList
+  Settings, LogOut, Armchair, BarChart3, ExternalLink, Users, Menu, X, ClipboardList, ConciergeBell, KeyRound
 } from 'lucide-react'
 import { useAuthStore } from '../../store/authStore'
 import { useStaff } from '../../staff/StaffContext'
@@ -10,6 +10,7 @@ import { useStaff } from '../../staff/StaffContext'
 // Nav per panel kind. `to` is relative to the panel base path ('' = index).
 const BILLER_NAV = [
   { to: '', icon: ShoppingBag, label: 'Online Orders', end: true },
+  { to: 'captain', icon: ConciergeBell, label: 'Captain Orders' },
   { to: 'dine-in', icon: Armchair, label: 'Dine-in' },
   { to: 'reservations', icon: Calendar, label: 'Reservations' },
   { to: 'reports', icon: BarChart3, label: 'Reports' },
@@ -19,6 +20,7 @@ const ADMIN_NAV = [
   { to: 'reports', icon: BarChart3, label: 'Reports' },
   { to: 'operations', icon: ClipboardList, label: 'Operations' },
   { to: 'customers', icon: Users, label: 'Customers' },
+  { to: 'staff', icon: KeyRound, label: 'Staff & logins' },
   { to: 'menu', icon: UtensilsCrossed, label: 'Menu' },
   { to: 'settings', icon: Settings, label: 'Settings' },
 ]
@@ -30,7 +32,8 @@ export default function AdminLayout({ children, title }) {
   const [navOpen, setNavOpen] = useState(false)
 
   const basePath = staff?.basePath || '/super_admin'
-  const navItems = staff?.kind === 'biller' ? BILLER_NAV : ADMIN_NAV
+  // Staff/login management is super-admin only.
+  const navItems = (staff?.kind === 'biller' ? BILLER_NAV : ADMIN_NAV).filter(n => n.to !== 'staff' || staff?.isSuper)
   const link = (to) => (to ? `${basePath}/${to}` : basePath)
 
   const handleLogout = () => {
