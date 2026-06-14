@@ -335,30 +335,6 @@ export default function AdminReports() {
         </div>
       </div>
 
-      {/* Order status summary + KOT listing */}
-      <div className="grid md:grid-cols-2 gap-5">
-        <div className="card p-4">
-          <div className="text-xs font-semibold text-stone-400 uppercase mb-3">Order status</div>
-          {Object.keys(statusCounts).length === 0 ? <div className="text-stone-400 text-sm">—</div> : (
-            <div className="space-y-1.5 text-sm">
-              {Object.entries(statusCounts).map(([s, n]) => (
-                <div key={s} className="flex justify-between"><span className="text-stone-600 capitalize">{s.replace(/_/g, ' ')}</span><span className="font-medium">{n}</span></div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="card p-4">
-          <div className="text-xs font-semibold text-stone-400 uppercase mb-3">KOT listing</div>
-          <div className="space-y-1.5 text-sm max-h-64 overflow-y-auto">
-            {rows.length === 0 ? <div className="text-stone-400">—</div> : rows.map(r => (
-              <div key={r.id} className="flex justify-between gap-2">
-                <span className="text-stone-600 truncate">#{r.billNo ?? r.id.slice(0, 6)} · {typeLabel(r.meta)}</span>
-                <span className="text-stone-400 whitespace-nowrap">{(r.items || []).reduce((s, i) => s + i.quantity, 0)} items · {formatIST(r.createdAt, 'h:mm a')}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
       </>)}
 
       {/* Order summary sub-report */}
