@@ -9,9 +9,10 @@ import { useStaff } from '../../staff/StaffContext'
 
 // Nav per panel kind. `to` is relative to the panel base path ('' = index).
 const BILLER_NAV = [
-  { to: '', icon: ShoppingBag, label: 'Orders', end: true },
+  { to: '', icon: ShoppingBag, label: 'Online Orders', end: true },
   { to: 'dine-in', icon: Armchair, label: 'Dine-in' },
   { to: 'reservations', icon: Calendar, label: 'Reservations' },
+  { to: 'reports', icon: BarChart3, label: 'Reports' },
 ]
 const ADMIN_NAV = [
   { to: '', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -73,15 +74,17 @@ export default function AdminLayout({ children, title }) {
               {label}
             </NavLink>
           ))}
-          <a
-            href="https://absolutenaansense.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all duration-150"
-          >
-            <ExternalLink size={17} />
-            Online ordering
-          </a>
+          {staff?.kind !== 'biller' && (
+            <a
+              href="https://absolutenaansense.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-stone-500 hover:bg-stone-50 hover:text-stone-800 transition-all duration-150"
+            >
+              <ExternalLink size={17} />
+              Online ordering
+            </a>
+          )}
         </nav>
 
         <div className="p-3 border-t border-stone-100">

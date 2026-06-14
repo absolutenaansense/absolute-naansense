@@ -32,6 +32,7 @@ export default function AdminReports() {
   const [billNo, setBillNo] = useState('')
   const [outletFilter, setOutletFilter] = useState(staff?.outlet || 'all')
   const activeOutlet = staff?.outlet || outletFilter
+  const isBiller = staff?.kind === 'biller'   // billers get a read-only report (no modify/delete)
 
   const [viewOrder, setViewOrder] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
@@ -205,8 +206,8 @@ export default function AdminReports() {
                     <div className="flex items-center gap-1">
                       <button onClick={() => setViewOrder(r)} title="View" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Eye size={14} /></button>
                       <button onClick={() => printBill(r)} title="Print" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Printer size={14} /></button>
-                      <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>
-                      <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+                      {!isBiller && <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>}
+                      {!isBiller && <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>}
                     </div>
                   </td>
                 </tr>
