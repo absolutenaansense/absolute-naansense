@@ -14,15 +14,9 @@ import { useStaff } from '../../staff/StaffContext'
 import { playRing, notify, requestNotifyPermission, armAudio } from '../../utils/notify'
 import { ordersApi } from '../../services/api'
 
-const STATUS_FILTERS = [
-  { value: 'payment_received', label: 'Awaiting confirm' },
-  { value: 'confirmed', label: 'Confirmed' },
-  { value: 'preparing', label: 'Preparing' },
-  { value: 'out_for_delivery', label: 'Out for delivery' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'cancelled', label: 'Cancelled' },
-  { value: '', label: 'All orders' },
-]
+// Active work-queue statuses (awaiting confirmation → out for delivery). Delivered
+// and cancelled orders leave the queue and live in Reports.
+const QUEUE_STATUSES = ['payment_received', 'confirmed', 'preparing', 'out_for_delivery']
 
 const STATUS_NEXT = {
   confirmed: 'preparing',
@@ -288,7 +282,6 @@ function OrderCard({ order, refetch, now }) {
 export default function AdminOrders() {
   const staff = useStaff()
   const outlet = staff?.outlet || 'renukoot'
-  const [filter, setFilter] = useState('payment_received')
   const [now, setNow] = useState(Date.now())
   const printedRef = useRef(new Set())
   const alertedRef = useRef(new Set())
@@ -349,17 +342,19 @@ export default function AdminOrders() {
     return () => supabase.removeChannel(channel)
   }, [refetch, outlet])
 
-  // Show customer (online) orders here — delivery + takeaway. POS counter orders
-  // are created by the walk-in sentinel user and managed in the Dine-in page.
-  const onlineOrders = orders.filter(o => !o.tableLabel && o.user?.phone !== '0000000000' && (o.outlet || 'renukoot') === outlet)
-  const filtered = filter ? onlineOrders.filter(o => o.status === filter) : onlineOrders
-  const pendingCount = onlineOrders.filter(o => o.status === 'payment_received').length
+  // Live queue: this outlet's online (delivery + takeaway) orders that still need
+  // handling — from awaiting confirmation through out-for-delivery. Delivered &
+  // cancelled orders drop off here (they're in Reports). POS orders are on Dine-in.
+  const queue = orders
+    .filter(o => !o.tableLabel && o.user?.phone !== '0000000000' && (o.outlet || 'renukoot') === outlet)
+    .filter(o => QUEUE_STATUSES.includes(o.status))
+  const pendingCount = queue.filter(o => o.status === 'payment_received').length
 
   return (
-    <AdminLayout>
+    <AdminLayout title="Online Orders">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h2 className="text-lg font-semibold text-stone-900">Orders</h2>
+          <h2 className="text-lg font-semibold text-stone-900">Online orders queue</h2>
           {pendingCount > 0 && (
             <p className="text-sm text-amber-600 font-medium">{pendingCount} order{pendingCount > 1 ? 's' : ''} awaiting confirmation</p>
           )}
@@ -369,33 +364,13 @@ export default function AdminOrders() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2 flex-wrap mb-4">
-        {STATUS_FILTERS.map(f => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-              filter === f.value
-                ? 'bg-stone-900 text-white border-stone-900'
-                : 'bg-white text-stone-600 border-stone-200 hover:border-stone-400'
-            }`}
-          >
-            {f.label}
-            {f.value === 'payment_received' && pendingCount > 0 && (
-              <span className="ml-1.5 bg-amber-500 text-white rounded-full px-1.5 py-0.5 text-xs">{pendingCount}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Orders list */}
+      {/* Orders queue */}
       {isLoading ? (
         <div className="text-center py-16 text-stone-400">Loading orders…</div>
-      ) : filtered.length === 0 ? (
-        <div className="text-center py-16 text-stone-400">No orders found.</div>
+      ) : queue.length === 0 ? (
+        <div className="text-center py-16 text-stone-400">No active orders. Delivered orders are in Reports.</div>
       ) : (
-        filtered.map(order => (
+        queue.map(order => (
           <OrderCard key={order.id} order={order} refetch={refetch} now={now} />
         ))
       )}
