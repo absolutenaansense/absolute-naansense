@@ -1,6 +1,18 @@
 import { supabase } from './supabase'
 import bcrypt from 'bcryptjs'
 import { withCancelRemark } from '../utils/orderNotes'
+import { useAuthStore } from '../store/authStore'
+
+// Who is performing the action (the signed-in staff account), for the audit log.
+const actorEmail = () => { try { return useAuthStore.getState().admin?.email || null } catch { return null } }
+
+// Append an operations-log entry for an order action (best-effort).
+async function logOp(orderId, action, detail) {
+  try {
+    const { data: o } = await supabase.from('Order').select('outlet, billNo').eq('id', orderId).single()
+    await opsApi.log({ outlet: o?.outlet, orderId, billNo: o?.billNo ?? null, kotNo: detail?.kotNo ?? null, action, detail, actor: actorEmail() })
+  } catch { /* ignore */ }
+}
 
 // --- Auth ---
 export const authApi = {
@@ -270,6 +282,7 @@ export const ordersApi = {
       .select()
       .single()
     if (error) throw { response: { data: { error: error.message } } }
+    await logOp(id, 'order_cancel', { remark: remark || null })
     return { data }
   },
 
@@ -359,7 +372,7 @@ export const reportsApi = {
     const since = new Date(Date.now() - 120 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('Order')
-      .select('id, billNo, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
+      .select('id, billNo, outlet, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
       .gte('createdAt', since)
       .order('createdAt', { ascending: false })
     if (error) throw { response: { data: { error: error.message } } }
@@ -435,6 +448,34 @@ export const addressApi = {
   },
 }
 
+// --- Operations audit log (biller actions on KOTs & bills) ---
+export const opsApi = {
+  // Best-effort: never block the underlying operation if logging fails.
+  log: async ({ outlet, orderId, billNo, kotNo, action, detail, actor }) => {
+    try {
+      await supabase.from('OpsLog').insert([{
+        outlet: outlet || 'renukoot',
+        orderId: orderId || null,
+        billNo: billNo ?? null,
+        kotNo: kotNo ?? null,
+        action,
+        detail: detail || null,
+        actor: actor || null,
+      }])
+    } catch { /* ignore */ }
+  },
+  list: async () => {
+    const since = new Date(Date.now() - 120 * 86400000).toISOString()
+    const { data, error } = await supabase
+      .from('OpsLog')
+      .select('*')
+      .gte('createdAt', since)
+      .order('createdAt', { ascending: false })
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: data || [] }
+  },
+}
+
 // --- Dine-in / POS ---
 // POS orders (dine-in + take-away) reuse Order/OrderItem with real columns:
 // orderType, tableLabel, customerName, billPrinted, isHeld, OrderItem.specialRequest.
@@ -452,7 +493,7 @@ const itemRows = (orderId, items, kotNo) => items.map(i => ({
   orderId, menuItemId: i.menuItemId || null, quantity: i.quantity, price: i.price,
   specialRequest: i.note || null, itemName: i.itemName || null, kotNo: kotNo ?? null,
 }))
-const nextKotNo = async () => { const { data } = await supabase.rpc('next_kot_no'); return data }
+const nextKotNo = async (outlet) => { const { data } = await supabase.rpc('next_kot_no', { p_outlet: outlet || 'renukoot' }); return data }
 
 export const dineApi = {
   ensureWalkInUser: async () => {
@@ -468,51 +509,58 @@ export const dineApi = {
     return data.id
   },
 
-  // Open (un-settled, un-cleared) dine-in orders for the floor view.
-  openOrders: async () => {
-    const { data, error } = await supabase
+  // Open (un-settled, un-cleared) dine-in orders for the floor view (one outlet).
+  openOrders: async (outlet) => {
+    let q = supabase
       .from('Order')
       .select(POS_SELECT)
       .eq('orderType', 'DINE_IN')
       .not('tableLabel', 'is', null)
       .not('status', 'in', '("delivered","cancelled")')
       .order('createdAt', { ascending: true })
+    if (outlet) q = q.eq('outlet', outlet)
+    const { data, error } = await q
     if (error) throw { response: { data: { error: error.message } } }
     return { data: data || [] }
   },
 
   // All orders from the last ~30 days with KOT-tagged items, for the KOT manager.
-  kotsRecent: async () => {
+  kotsRecent: async (outlet) => {
     const since = new Date(Date.now() - 30 * 86400000).toISOString()
-    const { data, error } = await supabase
+    let q = supabase
       .from('Order')
-      .select('id, tableLabel, orderType, billPrinted, status, paymentStatus, createdAt, customerName, customerPhone, deliveryAddress, items:OrderItem(id, quantity, price, itemName, specialRequest, kotNo, menuItem:MenuItem(name, category:Category(name)))')
+      .select('id, outlet, tableLabel, orderType, billPrinted, status, paymentStatus, createdAt, customerName, customerPhone, deliveryAddress, items:OrderItem(id, quantity, price, itemName, specialRequest, kotNo, menuItem:MenuItem(name, category:Category(name)))')
       .gte('createdAt', since)
       .order('createdAt', { ascending: false })
+    if (outlet) q = q.eq('outlet', outlet)
+    const { data, error } = await q
     if (error) throw { response: { data: { error: error.message } } }
     return { data: data || [] }
   },
 
-  // Recent POS orders for the side panel (any type).
-  recent: async () => {
-    const { data, error } = await supabase
+  // Recent POS orders for the side panel (one outlet).
+  recent: async (outlet) => {
+    let q = supabase
       .from('Order')
       .select('id, orderType, tableLabel, customerName, total, status, paymentStatus, billPrinted, createdAt, items:OrderItem(quantity)')
       .order('createdAt', { ascending: false })
       .limit(40)
+    if (outlet) q = q.eq('outlet', outlet)
+    const { data, error } = await q
     if (error) throw { response: { data: { error: error.message } } }
     return { data: data || [] }
   },
 
   // Start a new POS order (dine-in / take-away / delivery) with its first KOT round.
-  createPosOrder: async ({ orderType, table, name, phone, address, items }) => {
+  createPosOrder: async ({ orderType, table, name, phone, address, items, outlet }) => {
+    const out = outlet || 'renukoot'
     const userId = await dineApi.ensureWalkInUser()
     const { total } = totalsFor(items)
-    const kotNo = await nextKotNo()
+    const kotNo = await nextKotNo(out)
     const { data: order, error } = await supabase
       .from('Order')
       .insert([{
-        userId, paymentMethod: 'CASH_ON_DELIVERY', total,
+        userId, paymentMethod: 'CASH_ON_DELIVERY', total, outlet: out,
         orderType, tableLabel: table || null, customerName: name || null,
         customerPhone: phone || null, deliveryAddress: address || null,
         status: 'preparing', paymentStatus: 'pending', billPrinted: false, isHeld: false,
@@ -527,7 +575,8 @@ export const dineApi = {
 
   // Append another KOT round (new daily KOT number); recompute total, reset billPrinted.
   addItems: async ({ orderId, items }) => {
-    const kotNo = await nextKotNo()
+    const { data: ord } = await supabase.from('Order').select('outlet, billPrinted').eq('id', orderId).single()
+    const kotNo = await nextKotNo(ord?.outlet)
     const { error: ie } = await supabase.from('OrderItem').insert(itemRows(orderId, items, kotNo))
     if (ie) throw { response: { data: { error: ie.message } } }
     const { data: allItems } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
@@ -537,19 +586,22 @@ export const dineApi = {
       .update({ total, billPrinted: false, updatedAt: new Date().toISOString() })
       .eq('id', orderId)
     if (error) throw { response: { data: { error: error.message } } }
+    await logOp(orderId, ord?.billPrinted ? 'item_add_after_print' : 'kot_add', { kotNo, items: items.length })
     return { data: { total }, kotNo }
   },
 
   // Move items (whole table / KOT / selection) to another table's order.
   moveItems: async ({ fromOrderId, itemIds, toTable }) => {
+    const { data: src } = await supabase.from('Order').select('outlet').eq('id', fromOrderId).single()
+    const out = src?.outlet || 'renukoot'
     let { data: target } = await supabase.from('Order').select('id')
-      .eq('orderType', 'DINE_IN').eq('tableLabel', toTable)
+      .eq('orderType', 'DINE_IN').eq('tableLabel', toTable).eq('outlet', out)
       .not('status', 'in', '("delivered","cancelled")').maybeSingle()
     let targetId = target?.id
     if (!targetId) {
       const userId = await dineApi.ensureWalkInUser()
       const { data: created, error: ce } = await supabase.from('Order')
-        .insert([{ userId, paymentMethod: 'CASH_ON_DELIVERY', total: 0, orderType: 'DINE_IN', tableLabel: toTable, status: 'preparing', paymentStatus: 'pending', billPrinted: false, isHeld: false }])
+        .insert([{ userId, paymentMethod: 'CASH_ON_DELIVERY', total: 0, outlet: out, orderType: 'DINE_IN', tableLabel: toTable, status: 'preparing', paymentStatus: 'pending', billPrinted: false, isHeld: false }])
         .select('id').single()
       if (ce) throw { response: { data: { error: ce.message } } }
       targetId = created.id
@@ -570,21 +622,23 @@ export const dineApi = {
     await supabase.from('Order').update({ total, billPrinted: false, updatedAt: new Date().toISOString() }).eq('id', orderId)
   },
 
-  // Assign a sequential bill number if the order doesn't have one yet.
+  // Assign a sequential (per-outlet, per-FY) bill number if the order has none yet.
   ensureBillNo: async (orderId) => {
-    const { data: cur } = await supabase.from('Order').select('billNo').eq('id', orderId).single()
+    const { data: cur } = await supabase.from('Order').select('billNo, outlet').eq('id', orderId).single()
     if (cur?.billNo) return cur.billNo
-    const { data: bn } = await supabase.rpc('next_bill_no')
+    const { data: bn } = await supabase.rpc('next_bill_no', { p_outlet: cur?.outlet || 'renukoot' })
     return bn
   },
 
   markBillPrinted: async (orderId) => {
+    const { data: before } = await supabase.from('Order').select('billPrinted').eq('id', orderId).single()
     const billNo = await dineApi.ensureBillNo(orderId)
     const { data, error } = await supabase
       .from('Order')
       .update({ billPrinted: true, billNo, updatedAt: new Date().toISOString() })
       .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
+    if (before?.billPrinted) await logOp(orderId, 'reprint', { billNo })
     return { data }
   },
 
@@ -610,6 +664,7 @@ export const dineApi = {
       })
       .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
+    await logOp(orderId, complimentary ? 'waive_off' : 'settle', { discount: disc, total: grand, complimentary, split: payments.length > 1 })
     return { data }
   },
 
@@ -626,7 +681,9 @@ export const dineApi = {
 
   // Edit a running order's items: change quantities and/or remove lines, then
   // recompute the total (and reset billPrinted since the order changed).
-  updateOrderItems: async ({ orderId, updates = [], removeIds = [] }) => {
+  // `action` tags the audit entry ('kot_modify' default, or 'bill_modify').
+  updateOrderItems: async ({ orderId, updates = [], removeIds = [], action = 'kot_modify' }) => {
+    const { data: before } = await supabase.from('Order').select('billPrinted').eq('id', orderId).single()
     for (const u of updates) {
       const { error } = await supabase.from('OrderItem').update({ quantity: u.quantity }).eq('id', u.id)
       if (error) throw { response: { data: { error: error.message } } }
@@ -639,6 +696,9 @@ export const dineApi = {
     const { total } = totalsFor(allItems || [])
     const { error } = await supabase.from('Order').update({ total, billPrinted: false, updatedAt: new Date().toISOString() }).eq('id', orderId)
     if (error) throw { response: { data: { error: error.message } } }
+    // If the bill was already printed, this is a change after print.
+    const act = before?.billPrinted ? (action === 'kot_modify' ? 'item_add_after_print' : action) : action
+    await logOp(orderId, act, { updates: updates.length, removed: removeIds.length, total })
     return { data: { total } }
   },
 

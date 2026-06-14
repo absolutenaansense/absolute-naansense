@@ -8,6 +8,8 @@ import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
 import { printBill } from '../../utils/printKot'
+import { useStaff } from '../../staff/StaffContext'
+import { TIMELINE_PRESETS, rangeFor } from '../../utils/timeline'
 
 const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
@@ -23,10 +25,13 @@ const payLabel = (o) => o.paymentMethod === 'QR_UPI' ? 'UPI'
   : 'Cash'
 
 export default function AdminReports() {
+  const staff = useStaff()
   const [preset, setPreset] = useState('today')
   const [from, setFrom] = useState(todayIST())
   const [to, setTo] = useState(todayIST())
   const [billNo, setBillNo] = useState('')
+  const [outletFilter, setOutletFilter] = useState(staff?.outlet || 'all')
+  const activeOutlet = staff?.outlet || outletFilter
 
   const [viewOrder, setViewOrder] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
@@ -51,7 +56,7 @@ export default function AdminReports() {
       const keptIds = draft.map(x => x.id)
       const removeIds = editOrder.items.map(i => i.id).filter(id => !keptIds.includes(id))
       const updates = draft.filter(x => { const o = editOrder.items.find(i => i.id === x.id); return o && o.quantity !== x.quantity }).map(x => ({ id: x.id, quantity: x.quantity }))
-      await dineApi.updateOrderItems({ orderId: editOrder.id, updates, removeIds })
+      await dineApi.updateOrderItems({ orderId: editOrder.id, updates, removeIds, action: 'bill_modify' })
       toast.success('Tax invoice modified'); setEditOrder(null); await refetch()
     } catch { toast.error('Failed to modify') } finally { setBusy(false) }
   }
@@ -69,21 +74,20 @@ export default function AdminReports() {
 
   const applyPreset = (p) => {
     setPreset(p)
-    if (p === 'today') { setFrom(todayIST()); setTo(todayIST()) }
-    else if (p === 'yesterday') { setFrom(yesterdayIST()); setTo(yesterdayIST()) }
-    else if (p === 'month') { setFrom(formatIST(new Date().toISOString(), 'yyyy-MM') + '-01'); setTo(todayIST()) }
+    if (p !== 'custom') { const r = rangeFor(p); setFrom(r.from); setTo(r.to) }
   }
 
   const rows = useMemo(() => {
     return orders
       .filter(o => { const d = istDay(o.createdAt); return d >= from && d <= to })
+      .filter(o => activeOutlet === 'all' || (o.outlet || 'renukoot') === activeOutlet)
       .map(o => {
         const meta = getOrderMeta(o)
         const subtotal = (o.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
         const cgst = subtotal * CGST_RATE, sgst = subtotal * SGST_RATE
         return { ...o, meta, subtotal, cgst, sgst, grand: parseFloat(o.total) }
       })
-  }, [orders, from, to])
+  }, [orders, from, to, activeOutlet])
 
   const sales = rows.filter(r => r.status !== 'cancelled')
   const tot = sales.reduce((a, r) => ({
@@ -117,9 +121,16 @@ export default function AdminReports() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <h2 className="text-lg font-semibold text-stone-900">Sales Report</h2>
         <div className="flex items-center gap-2 flex-wrap">
-          {[['today', 'Today'], ['yesterday', 'Yesterday'], ['month', 'This Month']].map(([k, label]) => (
-            <button key={k} onClick={() => applyPreset(k)} className={`px-3 py-1.5 rounded-xl text-xs font-medium border ${preset === k ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-600 border-stone-200'}`}>{label}</button>
-          ))}
+          {!staff?.outlet && (
+            <select value={outletFilter} onChange={e => setOutletFilter(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
+              <option value="all">All outlets</option>
+              <option value="renukoot">Renukoot</option>
+              <option value="renusagar">Renusagar</option>
+            </select>
+          )}
+          <select value={preset} onChange={e => applyPreset(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
+            {TIMELINE_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+          </select>
           <input type="date" value={from} onChange={e => { setPreset('custom'); setFrom(e.target.value) }} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5" />
           <span className="text-stone-400 text-xs">to</span>
           <input type="date" value={to} onChange={e => { setPreset('custom'); setTo(e.target.value) }} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5" />

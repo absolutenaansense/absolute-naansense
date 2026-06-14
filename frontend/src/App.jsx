@@ -12,26 +12,15 @@ import ProfilePage from './pages/customer/ProfilePage'
 import TermsPage from './pages/customer/TermsPage'
 import PrivacyPage from './pages/customer/PrivacyPage'
 
-// Admin pages
-import AdminLoginPage from './pages/admin/AdminLoginPage'
-import AdminDashboard from './pages/admin/AdminDashboard'
-import AdminOrders from './pages/admin/AdminOrders'
-import AdminDineIn from './pages/admin/AdminDineIn'
-import AdminReservations from './pages/admin/AdminReservations'
-import AdminReports from './pages/admin/AdminReports'
-import AdminCustomers from './pages/admin/AdminCustomers'
-import AdminMenu from './pages/admin/AdminMenu'
-import AdminSettings from './pages/admin/AdminSettings'
+// Staff panels (role-based)
+import PanelGate from './staff/PanelGate'
+import AdminMonitorApp from './staff/AdminMonitorApp'
+import BillerApp from './staff/BillerApp'
 
 function CustomerRoute({ children }) {
   const { user } = useAuthStore()
   const location = useLocation()
   return user ? children : <Navigate to="/login" replace state={{ from: location.pathname }} />
-}
-
-function AdminRoute({ children }) {
-  const { admin } = useAuthStore()
-  return admin ? children : <Navigate to="/admin/login" replace />
 }
 
 export default function App() {
@@ -48,16 +37,15 @@ export default function App() {
       <Route path="/orders" element={<CustomerRoute><OrdersPage /></CustomerRoute>} />
       <Route path="/profile" element={<CustomerRoute><ProfilePage /></CustomerRoute>} />
 
-      {/* Admin routes */}
-      <Route path="/admin/login" element={<AdminLoginPage />} />
-      <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-      <Route path="/admin/orders" element={<AdminRoute><AdminOrders /></AdminRoute>} />
-      <Route path="/admin/dine-in" element={<AdminRoute><AdminDineIn /></AdminRoute>} />
-      <Route path="/admin/reservations" element={<AdminRoute><AdminReservations /></AdminRoute>} />
-      <Route path="/admin/reports" element={<AdminRoute><AdminReports /></AdminRoute>} />
-      <Route path="/admin/customers" element={<AdminRoute><AdminCustomers /></AdminRoute>} />
-      <Route path="/admin/menu" element={<AdminRoute><AdminMenu /></AdminRoute>} />
-      <Route path="/admin/settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
+      {/* Staff panels — each has its own role/outlet-checked login */}
+      <Route path="/super_admin/*" element={<PanelGate panelKey="super_admin"><AdminMonitorApp /></PanelGate>} />
+      <Route path="/renukoot_admin/*" element={<PanelGate panelKey="renukoot_admin"><AdminMonitorApp /></PanelGate>} />
+      <Route path="/renusagar_admin/*" element={<PanelGate panelKey="renusagar_admin"><AdminMonitorApp /></PanelGate>} />
+      <Route path="/renukoot_biller/*" element={<PanelGate panelKey="renukoot_biller"><BillerApp /></PanelGate>} />
+      <Route path="/renusagar_biller/*" element={<PanelGate panelKey="renusagar_biller"><BillerApp /></PanelGate>} />
+
+      {/* Legacy admin path → super admin */}
+      <Route path="/admin/*" element={<Navigate to="/super_admin" replace />} />
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -8,6 +8,7 @@ import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
 import { printTicket } from '../../utils/printKot'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
+import { useStaff } from '../../staff/StaffContext'
 import { FLOOR_SECTIONS, ALL_TABLES } from '../../config/floorLayout'
 
 const GST_RATE = 0.05
@@ -63,13 +64,15 @@ export default function AdminDineIn() {
   const [noteOpen, setNoteOpen] = useState({})   // pending item ids with the note field revealed
   const [busy, setBusy] = useState(false)
   const [invoiceOrder, setInvoiceOrder] = useState(null)   // on-screen, view-only tax invoice
+  const staff = useStaff()
+  const outlet = staff?.outlet || 'renukoot'
 
   const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
   const { data: openOrders = [], refetch } = useQuery({
-    queryKey: ['dine-open'], queryFn: () => dineApi.openOrders().then(r => r.data), refetchInterval: 10000,
+    queryKey: ['dine-open', outlet], queryFn: () => dineApi.openOrders(outlet).then(r => r.data), refetchInterval: 10000,
   })
   const { data: recent = [], refetch: refetchRecent } = useQuery({
-    queryKey: ['dine-recent'], queryFn: () => dineApi.recent().then(r => r.data), enabled: recentOpen, refetchInterval: recentOpen ? 15000 : false,
+    queryKey: ['dine-recent', outlet], queryFn: () => dineApi.recent(outlet).then(r => r.data), enabled: recentOpen, refetchInterval: recentOpen ? 15000 : false,
   })
 
   const ordersByTable = useMemo(() => {
@@ -129,7 +132,7 @@ export default function AdminDineIn() {
       const running = !!activeOrder
       let orderId = activeOrder?.id, kotNo
       if (activeOrder) { const r = await dineApi.addItems({ orderId, items }); kotNo = r.kotNo }
-      else { const { data, kotNo: k } = await dineApi.createPosOrder({ orderType: 'DINE_IN', table: ctx.label, name: custName, phone: custPhone, address: custAddress, items }); orderId = data.id; kotNo = k }
+      else { const { data, kotNo: k } = await dineApi.createPosOrder({ orderType: 'DINE_IN', table: ctx.label, name: custName, phone: custPhone, address: custAddress, items, outlet }); orderId = data.id; kotNo = k }
       printRoundKot(orderId, items, 'DINE_IN', ctx.label, kotNo, running)
       toast.success('KOT sent to kitchen')
       setPending({}); await refetch()
@@ -226,7 +229,7 @@ export default function AdminDineIn() {
     try {
       const items = pendingItems()
       const type = ctx.type
-      const { data: order, kotNo } = await dineApi.createPosOrder({ orderType: type, name: custName, phone: custPhone, address: custAddress, items })
+      const { data: order, kotNo } = await dineApi.createPosOrder({ orderType: type, name: custName, phone: custPhone, address: custAddress, items, outlet })
       const { data: settled } = await dineApi.settle({ orderId: order.id, paymentMethod })
       await dineApi.clearTable(order.id)
       printRoundKot(order.id, items, type, null, kotNo)

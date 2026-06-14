@@ -10,6 +10,7 @@ import { printTicket } from '../../utils/printKot'
 import { sendKotWhatsApp } from '../../utils/whatsappKot'
 import AdminLayout from '../../components/admin/AdminLayout'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
+import { useStaff } from '../../staff/StaffContext'
 import { ordersApi } from '../../services/api'
 
 const STATUS_FILTERS = [
@@ -284,6 +285,8 @@ function OrderCard({ order, refetch, now }) {
 }
 
 export default function AdminOrders() {
+  const staff = useStaff()
+  const outlet = staff?.outlet || 'renukoot'
   const [filter, setFilter] = useState('payment_received')
   const [now, setNow] = useState(Date.now())
   const printedRef = useRef(new Set())
@@ -304,8 +307,9 @@ export default function AdminOrders() {
       .channel('admin-new-orders')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'Order' }, (payload) => {
         const row = payload.new
-        // Only auto-print fresh customer orders. POS orders are created already
+        // Only this outlet's fresh customer orders. POS orders are created already
         // 'preparing' (or with a table) and print on the POS device.
+        if (row.outlet && row.outlet !== outlet) return
         if (row.tableLabel || !['payment_received', 'pending'].includes(row.status)) return
         if (printedRef.current.has(row.id)) return
         printedRef.current.add(row.id)
@@ -320,11 +324,11 @@ export default function AdminOrders() {
       })
       .subscribe()
     return () => supabase.removeChannel(channel)
-  }, [refetch])
+  }, [refetch, outlet])
 
   // Show customer (online) orders here — delivery + takeaway. POS counter orders
   // are created by the walk-in sentinel user and managed in the Dine-in page.
-  const onlineOrders = orders.filter(o => !o.tableLabel && o.user?.phone !== '0000000000')
+  const onlineOrders = orders.filter(o => !o.tableLabel && o.user?.phone !== '0000000000' && (o.outlet || 'renukoot') === outlet)
   const filtered = filter ? onlineOrders.filter(o => o.status === filter) : onlineOrders
   const pendingCount = onlineOrders.filter(o => o.status === 'payment_received').length
 

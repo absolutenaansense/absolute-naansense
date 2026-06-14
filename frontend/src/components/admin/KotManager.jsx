@@ -6,6 +6,7 @@ import { dineApi } from '../../services/api'
 import { formatIST } from '../../utils/dateIST'
 import { printTicket } from '../../utils/printKot'
 import { sendKotWhatsApp } from '../../utils/whatsappKot'
+import { useStaff } from '../../staff/StaffContext'
 
 const nameOf = (it) => it.menuItem?.name || it.itemName || ''
 
@@ -28,8 +29,10 @@ export default function KotManager() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
+  const staff = useStaff()
+  const outlet = staff?.outlet || 'renukoot'
   const { data: orders = [], refetch } = useQuery({
-    queryKey: ['kot-manager'], queryFn: () => dineApi.kotsRecent().then(r => r.data),
+    queryKey: ['kot-manager', outlet], queryFn: () => dineApi.kotsRecent(outlet).then(r => r.data),
     enabled: open, refetchInterval: open ? 15000 : false,
   })
 
@@ -75,7 +78,7 @@ export default function KotManager() {
   const doCancel = async (kot) => {
     if (!confirm(`Cancel KOT ${kot.kotNo}? Its items will be removed.`)) return
     setBusy(true)
-    try { await dineApi.updateOrderItems({ orderId: kot.order.id, removeIds: kot.items.map(i => i.id) }); toast.success(`KOT ${kot.kotNo} cancelled`); await refetch() }
+    try { await dineApi.updateOrderItems({ orderId: kot.order.id, removeIds: kot.items.map(i => i.id), action: 'kot_cancel' }); toast.success(`KOT ${kot.kotNo} cancelled`); await refetch() }
     catch { toast.error('Failed to cancel') } finally { setBusy(false) }
   }
 
