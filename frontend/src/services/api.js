@@ -212,7 +212,7 @@ export const ordersApi = {
   paymentReceived: async (orderId) => {
     const { data, error } = await supabase
       .from('Order')
-      .update({ status: 'payment_received', paymentStatus: 'paid', updatedAt: new Date().toISOString() })
+      .update({ status: 'payment_received', paymentStatus: 'paid', settled: true, paymentMode: 'online', updatedAt: new Date().toISOString() })
       .eq('id', orderId)
       .select()
       .single()
@@ -291,12 +291,13 @@ export const ordersApi = {
 
   confirmOrder: async (id) => {
     // Assign a sequential (per-outlet, per-financial-year) bill number if not set.
-    const { data: cur } = await supabase.from('Order').select('billNo, outlet').eq('id', id).single()
+    const { data: cur } = await supabase.from('Order').select('billNo, outlet, paymentMethod').eq('id', id).single()
     let billNo = cur?.billNo
     if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no', { p_outlet: cur?.outlet || 'renukoot' }); billNo = bn }
+    const confirmMode = cur?.paymentMethod === 'CASH_ON_DELIVERY' ? 'cash' : 'online'
     const { data, error } = await supabase
       .from('Order')
-      .update({ status: 'confirmed', paymentStatus: 'paid', billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
+      .update({ status: 'confirmed', paymentStatus: 'paid', settled: true, paymentMode: confirmMode, billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single()
@@ -559,6 +560,22 @@ const itemRows = (orderId, items, kotNo) => items.map(i => ({
 }))
 const nextKotNo = async (outlet) => { const { data } = await supabase.rpc('next_kot_no', { p_outlet: outlet || 'renukoot' }); return data }
 
+// Resolve the Order fields for a chosen payment mode against a grand total.
+// cash/upi/card/online -> settled in full; part -> partial (settled iff paid >= grand);
+// due -> nothing received yet (stays unsettled). Complimentary is a full waive-off.
+const PAY_LABEL = { cash: 'Cash', upi: 'UPI', card: 'Card', online: 'Online' }
+const PAY_METHOD = { cash: 'CASH_ON_DELIVERY', upi: 'QR_UPI', card: 'CARD', online: 'ONLINE' }
+const paymentFields = (mode, grand, paidInput = 0, complimentary = false) => {
+  if (complimentary) return { settled: true, paymentStatus: 'paid', paymentMethod: 'COMPLIMENTARY', paymentMode: 'comp', paidAmount: 0, payments: null }
+  if (mode === 'due') return { settled: false, paymentStatus: 'pending', paymentMethod: 'CASH_ON_DELIVERY', paymentMode: 'due', paidAmount: 0, payments: null }
+  if (mode === 'part') {
+    const paid = Math.min(Math.max(0, Number(paidInput) || 0), grand)
+    const settled = paid >= grand
+    return { settled, paymentStatus: settled ? 'paid' : 'pending', paymentMethod: 'CASH_ON_DELIVERY', paymentMode: settled ? 'cash' : 'part', paidAmount: paid, payments: paid > 0 ? [{ method: 'Cash', amount: paid }] : null }
+  }
+  return { settled: true, paymentStatus: 'paid', paymentMethod: PAY_METHOD[mode] || 'CASH_ON_DELIVERY', paymentMode: mode || 'cash', paidAmount: grand, payments: [{ method: PAY_LABEL[mode] || 'Cash', amount: grand }] }
+}
+
 export const dineApi = {
   ensureWalkInUser: async () => {
     const { data: existing } = await supabase.from('User').select('id').eq('phone', WALKIN_PHONE).maybeSingle()
@@ -606,13 +623,20 @@ export const dineApi = {
   recent: async (outlet) => {
     let q = supabase
       .from('Order')
-      .select('id, orderType, tableLabel, customerName, total, status, paymentStatus, billPrinted, createdAt, items:OrderItem(quantity)')
+      .select('id, orderType, tableLabel, customerName, customerPhone, total, status, paymentStatus, paymentMethod, paymentMode, settled, paidAmount, billNo, billPrinted, createdAt, items:OrderItem(quantity)')
       .order('createdAt', { ascending: false })
-      .limit(40)
+      .limit(60)
     if (outlet) q = q.eq('outlet', outlet)
     const { data, error } = await q
     if (error) throw { response: { data: { error: error.message } } }
     return { data: data || [] }
+  },
+
+  // Full order (with items) for viewing a tax invoice from the recent panel.
+  getOrder: async (id) => {
+    const { data, error } = await supabase.from('Order').select(POS_SELECT).eq('id', id).single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
   },
 
   // Start a new POS order (dine-in / take-away / delivery) with its first KOT round.
@@ -706,29 +730,43 @@ export const dineApi = {
     return { data }
   },
 
-  // Mark paid with optional discount, complimentary, and split payments.
-  // Recomputes the total authoritatively (discount applied before 5% GST).
-  settle: async ({ orderId, payments = [], discount = 0, complimentary = false }) => {
+  // Generate the bill and apply a payment mode in one step (the dine-in / counter
+  // "settle" action). Recomputes the total authoritatively (discount before 5% GST).
+  // A bill is only 'settled' for cash/upi/card/online (or full 'part'); 'due' and
+  // partial 'part' generate the bill but leave it UNSETTLED with an outstanding amount.
+  settle: async ({ orderId, mode = 'cash', paidAmount = 0, discount = 0, complimentary = false }) => {
     const { data: items } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
     const subtotal = (items || []).reduce((s, i) => s + parseFloat(i.price) * i.quantity, 0)
     const disc = complimentary ? subtotal : Math.min(Math.max(0, discount), subtotal)
     const taxable = Math.max(0, subtotal - disc)
     const grand = complimentary ? 0 : Math.round(taxable * 1.05)
     const billNo = await dineApi.ensureBillNo(orderId)
-    const paymentMethod = complimentary ? 'COMPLIMENTARY'
-      : payments.length > 1 ? 'SPLIT'
-      : (payments[0]?.method === 'UPI' ? 'QR_UPI' : 'CASH_ON_DELIVERY')
+    const pf = paymentFields(mode, grand, paidAmount, complimentary)
     const { data, error } = await supabase
       .from('Order')
       .update({
-        paymentStatus: 'paid', paymentMethod, total: grand,
-        discount: disc, isComplimentary: complimentary,
-        payments: payments.length ? payments : null,
-        billPrinted: true, billNo, updatedAt: new Date().toISOString(),
+        total: grand, discount: disc, isComplimentary: complimentary,
+        billPrinted: true, billNo, updatedAt: new Date().toISOString(), ...pf,
       })
       .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
-    await logOp(orderId, complimentary ? 'waive_off' : 'settle', { discount: disc, total: grand, complimentary, split: payments.length > 1 })
+    await logOp(orderId, complimentary ? 'waive_off' : (pf.settled ? 'settle' : 'bill_unsettled'), { mode: pf.paymentMode, total: grand, paid: pf.paidAmount, settled: pf.settled, discount: disc })
+    return { data }
+  },
+
+  // Change / confirm the payment mode on an already-billed order (the "payment mode
+  // modification" action in Recent orders). Settles or un-settles accordingly.
+  setPayment: async ({ orderId, mode, paidAmount = 0 }) => {
+    const { data: ord } = await supabase.from('Order').select('total, isComplimentary').eq('id', orderId).single()
+    const grand = parseFloat(ord?.total) || 0
+    const billNo = await dineApi.ensureBillNo(orderId)
+    const pf = paymentFields(mode, grand, paidAmount, false)
+    const { data, error } = await supabase
+      .from('Order')
+      .update({ billPrinted: true, billNo, updatedAt: new Date().toISOString(), ...pf })
+      .eq('id', orderId).select(POS_SELECT).single()
+    if (error) throw { response: { data: { error: error.message } } }
+    await logOp(orderId, 'payment_mode', { mode: pf.paymentMode, paid: pf.paidAmount, settled: pf.settled })
     return { data }
   },
 

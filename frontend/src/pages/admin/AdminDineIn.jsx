@@ -41,6 +41,11 @@ const LEGEND = [
   ['printed', 'Printed', 'bg-green-100 border-green-300'],
   ['paid', 'Paid', 'bg-amber-100 border-amber-300'],
 ]
+// Payment modes for settling a bill. cash is the default.
+const PAY_MODES = [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['online', 'Online'], ['part', 'Part'], ['due', 'Due']]
+const MODE_LABEL = Object.fromEntries(PAY_MODES)
+const RECENT_TABS = [['unbilled', 'Unbilled'], ['DINE_IN', 'Dine-in'], ['TAKEAWAY', 'Takeaway'], ['DELIVERY', 'Delivery']]
+const outstandingOf = (o) => Math.max(0, (parseFloat(o.total) || 0) - (parseFloat(o.paidAmount) || 0))
 
 export default function AdminDineIn() {
   const [ctx, setCtx] = useState(null)          // null | { type:'DINE_IN', label } | { type:'TAKEAWAY' }
@@ -58,8 +63,11 @@ export default function AdminDineIn() {
   const [moveKot, setMoveKot] = useState(null)      // selected KOT no (kot-wise)
   const [discount, setDiscount] = useState('')
   const [complimentary, setComplimentary] = useState(false)
-  const [payMode, setPayMode] = useState('cash')  // cash | upi | split
-  const [cashAmt, setCashAmt] = useState('')
+  const [payMode, setPayMode] = useState('cash')  // cash | upi | card | online | part | due
+  const [partAmt, setPartAmt] = useState('')      // amount received when mode = part
+  const [recentTab, setRecentTab] = useState('unbilled')  // unbilled | DINE_IN | TAKEAWAY | DELIVERY
+  const [payEditId, setPayEditId] = useState(null)        // recent order whose payment editor is open
+  const [payEditAmt, setPayEditAmt] = useState('')
   const [openItem, setOpenItem] = useState({ show: false, name: '', price: '' })
   const [noteOpen, setNoteOpen] = useState({})   // pending item ids with the note field revealed
   const [busy, setBusy] = useState(false)
@@ -72,7 +80,7 @@ export default function AdminDineIn() {
     queryKey: ['dine-open', outlet], queryFn: () => dineApi.openOrders(outlet).then(r => r.data), refetchInterval: 10000,
   })
   const { data: recent = [], refetch: refetchRecent } = useQuery({
-    queryKey: ['dine-recent', outlet], queryFn: () => dineApi.recent(outlet).then(r => r.data), enabled: recentOpen, refetchInterval: recentOpen ? 15000 : false,
+    queryKey: ['dine-recent', outlet], queryFn: () => dineApi.recent(outlet).then(r => r.data), refetchInterval: recentOpen ? 15000 : 60000,
   })
 
   const ordersByTable = useMemo(() => {
@@ -80,6 +88,21 @@ export default function AdminDineIn() {
     openOrders.forEach(o => { if (o.tableLabel) m[o.tableLabel] = o })
     return m
   }, [openOrders])
+
+  // Segregate recent orders: Unbilled (KOTs, no bill yet) vs billed Dine-in/Takeaway/Delivery.
+  const recentView = useMemo(() => {
+    const active = recent.filter(o => o.status !== 'cancelled')
+    const billed = active.filter(o => o.billNo)
+    const unsettled = billed.filter(o => !o.settled)
+    return {
+      unbilled: active.filter(o => !o.billNo),
+      DINE_IN: billed.filter(o => o.orderType === 'DINE_IN'),
+      TAKEAWAY: billed.filter(o => o.orderType === 'TAKEAWAY'),
+      DELIVERY: billed.filter(o => o.orderType === 'DELIVERY'),
+      unsettled,
+      unsettledTotal: unsettled.reduce((s, o) => s + outstandingOf(o), 0),
+    }
+  }, [recent])
 
   const isDineIn = ctx?.type === 'DINE_IN'
   const isTakeaway = ctx?.type === 'TAKEAWAY'
@@ -94,7 +117,7 @@ export default function AdminDineIn() {
   const pendingTotals = totals(pendingArr.map(p => ({ price: p.item.price, quantity: p.quantity })))
 
   const open = (next) => {
-    setCtx(next); setPending({}); setSettleOpen(false); setSearch('')
+    setCtx(next); setPending({}); setSettleOpen(false); setSearch(''); setPayMode('cash'); setPartAmt('')
     const ord = next.type === 'DINE_IN' ? ordersByTable[next.label] : null
     const m = ord ? getOrderMeta(ord) : {}
     setCustName(m.name || ''); setCustPhone(m.phone || ''); setCustAddress(m.address || '')
@@ -146,23 +169,17 @@ export default function AdminDineIn() {
     catch (e) { toast.error('Failed to generate tax invoice') } finally { setBusy(false) }
   }
 
-  const openSettle = () => { setDiscount(''); setComplimentary(false); setPayMode('cash'); setCashAmt(''); setSettleOpen(true) }
+  const openSettle = () => { setDiscount(''); setComplimentary(false); setPayMode('cash'); setPartAmt(''); setSettleOpen(true) }
 
   const doSettle = async () => {
     if (!activeOrder) return
-    const sub = committedTotals.subtotal
-    const disc = complimentary ? sub : Math.min(Number(discount) || 0, sub)
-    const grand = complimentary ? 0 : Math.round(Math.max(0, sub - disc) * 1.05)
-    let payments = []
-    if (!complimentary) {
-      if (payMode === 'split') { const cash = Math.min(Number(cashAmt) || 0, grand); payments = [{ method: 'Cash', amount: cash }, { method: 'UPI', amount: grand - cash }] }
-      else if (payMode === 'upi') payments = [{ method: 'UPI', amount: grand }]
-      else payments = [{ method: 'Cash', amount: grand }]
-    }
+    const disc = complimentary ? 0 : Math.min(Number(discount) || 0, committedTotals.subtotal)
     setBusy(true)
     try {
-      const { data } = await dineApi.settle({ orderId: activeOrder.id, payments, discount: complimentary ? 0 : disc, complimentary })
-      setInvoiceOrder(data); toast.success(`Table ${ctx.label} settled`); setSettleOpen(false); await refetch()
+      const { data } = await dineApi.settle({ orderId: activeOrder.id, mode: payMode, paidAmount: Number(partAmt) || 0, discount: disc, complimentary })
+      setInvoiceOrder(data)
+      toast.success(data.settled ? `Table ${ctx.label} settled` : `Bill generated — ${MODE_LABEL[payMode]} (unsettled)`)
+      setSettleOpen(false); await refetch(); refetchRecent()
     } catch (e) { toast.error('Failed to settle') } finally { setBusy(false) }
   }
 
@@ -221,8 +238,9 @@ export default function AdminDineIn() {
     } catch (e) { toast.error('Failed to move') } finally { setBusy(false) }
   }
 
-  // Take-away / Delivery: one-shot counter sale (create -> pay -> close); prints KOT, shows tax invoice on screen.
-  const counterCheckout = async (paymentMethod) => {
+  // Take-away / Delivery counter sale: create -> bill with the chosen payment mode -> close.
+  // cash/upi/card/online settle immediately; part/due generate the bill but leave it unsettled.
+  const counterCheckout = async (mode) => {
     if (pendingArr.length === 0) { toast.error('Add items first'); return }
     if (isDelivery && (!custName || !custPhone || !custAddress)) { toast.error('Name, phone and address required for delivery'); return }
     setBusy(true)
@@ -230,13 +248,29 @@ export default function AdminDineIn() {
       const items = pendingItems()
       const type = ctx.type
       const { data: order, kotNo } = await dineApi.createPosOrder({ orderType: type, name: custName, phone: custPhone, address: custAddress, items, outlet })
-      const { data: settled } = await dineApi.settle({ orderId: order.id, paymentMethod })
+      const { data: billed } = await dineApi.settle({ orderId: order.id, mode, paidAmount: Number(partAmt) || 0 })
       await dineApi.clearTable(order.id)
       printRoundKot(order.id, items, type, null, kotNo)
-      setInvoiceOrder(settled)
-      toast.success(`${type === 'DELIVERY' ? 'Delivery' : 'Take-away'} order done`)
+      setInvoiceOrder(billed)
+      toast.success(billed.settled ? `${type === 'DELIVERY' ? 'Delivery' : 'Take-away'} settled` : `Bill generated — ${MODE_LABEL[mode]} (unsettled)`)
       close(); refetchRecent()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed') } finally { setBusy(false) }
+  }
+
+  const viewInvoice = async (id) => {
+    try { const { data } = await dineApi.getOrder(id); setInvoiceOrder(data) }
+    catch { toast.error('Failed to load invoice') }
+  }
+
+  // Confirm / modify the payment mode on an already-billed recent order.
+  const applyPayment = async (orderId, mode, paidAmount) => {
+    setBusy(true)
+    try {
+      await dineApi.setPayment({ orderId, mode, paidAmount: Number(paidAmount) || 0 })
+      setPayEditId(null); setPayEditAmt('')
+      toast.success(mode === 'due' ? 'Marked due' : mode === 'part' ? 'Partial payment saved' : `Settled — ${MODE_LABEL[mode]}`)
+      await refetchRecent(); refetch()
+    } catch (e) { toast.error('Failed to update payment') } finally { setBusy(false) }
   }
 
   const filteredMenu = (menu || []).map(c => ({ ...c, menuItems: c.menuItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase())) })).filter(c => c.menuItems.length > 0)
@@ -256,7 +290,11 @@ export default function AdminDineIn() {
           </div>
           <button onClick={() => open({ type: 'TAKEAWAY' })} className="btn-primary py-2 px-3 rounded-xl text-sm"><ShoppingBag size={15} /> Take Away</button>
           <button onClick={() => open({ type: 'DELIVERY' })} className="btn-primary py-2 px-3 rounded-xl text-sm"><Truck size={15} /> Delivery</button>
-          <button onClick={() => setRecentOpen(true)} className="btn-ghost text-stone-500 text-sm border border-stone-200 rounded-xl px-3 py-2"><Clock size={15} /> Recent</button>
+          <button onClick={() => setRecentOpen(true)} className="relative btn-ghost text-stone-500 text-sm border border-stone-200 rounded-xl px-3 py-2"><Clock size={15} /> Recent
+            {recentView.unsettled.length > 0 && (
+              <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-semibold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center">{recentView.unsettled.length}</span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -287,27 +325,91 @@ export default function AdminDineIn() {
 
       {/* Recent panel */}
       {recentOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setRecentOpen(false)}>
-          <div className="w-full max-w-sm bg-white h-full overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white border-b border-stone-100 px-4 py-3 flex items-center justify-between">
-              <span className="font-semibold text-stone-900">Recent orders</span>
-              <button onClick={() => setRecentOpen(false)} className="p-2 text-stone-400 hover:text-stone-700"><X size={20} /></button>
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => { setRecentOpen(false); setPayEditId(null) }}>
+          <div className="w-full max-w-md bg-white h-full overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-stone-100 z-10">
+              <div className="px-4 py-3 flex items-center justify-between">
+                <span className="font-semibold text-stone-900">Recent orders</span>
+                <button onClick={() => setRecentOpen(false)} className="p-2 text-stone-400 hover:text-stone-700"><X size={20} /></button>
+              </div>
+              {recentView.unsettled.length > 0 && (
+                <div className="mx-4 mb-2 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700 flex items-center justify-between">
+                  <span className="font-medium">{recentView.unsettled.length} unsettled bill{recentView.unsettled.length > 1 ? 's' : ''}</span>
+                  <span className="font-semibold">₹{recentView.unsettledTotal.toFixed(0)} due</span>
+                </div>
+              )}
+              <div className="flex border-t border-stone-100 text-xs">
+                {RECENT_TABS.map(([k, label]) => {
+                  const list = recentView[k]
+                  const due = k !== 'unbilled' && list.filter(o => !o.settled).length
+                  return (
+                    <button key={k} onClick={() => { setRecentTab(k); setPayEditId(null) }}
+                      className={`flex-1 py-2.5 font-medium relative ${recentTab === k ? 'text-brand-600 border-b-2 border-brand-500' : 'text-stone-500'}`}>
+                      {label} <span className="text-stone-400">({list.length})</span>
+                      {due > 0 && <span className="ml-1 inline-block w-1.5 h-1.5 rounded-full bg-red-500 align-middle" />}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
+
             <div className="p-4 space-y-2">
-              {recent.length === 0 && <div className="text-center text-stone-400 text-sm py-10">No recent orders</div>}
-              {recent.map(o => {
+              {recentView[recentTab].length === 0 && <div className="text-center text-stone-400 text-sm py-10">Nothing here</div>}
+              {recentView[recentTab].map(o => {
                 const m = getOrderMeta(o)
-                const where = m.type === 'DINE_IN' ? `Table ${m.table}` : m.type === 'TAKEAWAY' ? 'Take Away' : 'Delivery'
+                const where = m.type === 'DINE_IN' ? `Table ${m.table || o.tableLabel || ''}` : m.type === 'TAKEAWAY' ? 'Take Away' : 'Delivery'
+                const who = o.customerName ? ` · ${o.customerName}` : ''
+                const qty = (o.items || []).reduce((s, i) => s + i.quantity, 0)
+                const billed = !!o.billNo
+                const unsettled = billed && !o.settled
+                const out = outstandingOf(o)
+                const editing = payEditId === o.id
                 return (
-                  <div key={o.id} className="border border-stone-100 rounded-xl p-3 text-sm">
+                  <div key={o.id} className={`border rounded-xl p-3 text-sm ${unsettled ? 'border-red-200 bg-red-50/40' : 'border-stone-100'}`}>
                     <div className="flex justify-between">
-                      <span className="font-medium text-stone-800">{where}</span>
+                      <span className="font-medium text-stone-800">{where}{who}{billed && <span className="text-stone-400 font-normal"> · #{o.billNo}</span>}</span>
                       <span className="font-semibold">₹{parseFloat(o.total).toFixed(0)}</span>
                     </div>
                     <div className="flex justify-between text-xs text-stone-400 mt-0.5">
-                      <span>{(o.items || []).reduce((s, i) => s + i.quantity, 0)} items · {o.paymentStatus === 'paid' ? 'Paid' : o.status}</span>
+                      <span>{qty} item{qty !== 1 ? 's' : ''}</span>
                       <span>{formatIST(o.createdAt, 'h:mm a')}</span>
                     </div>
+
+                    {/* Settlement status */}
+                    <div className="mt-1.5 flex items-center justify-between">
+                      {!billed ? (
+                        <span className="text-[11px] font-medium text-blue-600">Running · KOT only</span>
+                      ) : o.settled ? (
+                        <span className="text-[11px] font-medium text-green-600">Settled · {MODE_LABEL[o.paymentMode] || 'Paid'}</span>
+                      ) : o.paymentMode === 'part' ? (
+                        <span className="text-[11px] font-medium text-red-600">Part paid ₹{parseFloat(o.paidAmount).toFixed(0)} · ₹{out.toFixed(0)} due</span>
+                      ) : (
+                        <span className="text-[11px] font-medium text-red-600">UNSETTLED · ₹{out.toFixed(0)} due</span>
+                      )}
+                      {billed && (
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => viewInvoice(o.id)} title="View / print invoice" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Receipt size={13} /></button>
+                          <button onClick={() => { setPayEditId(editing ? null : o.id); setPayEditAmt('') }} title="Payment mode"
+                            className={`px-2 h-7 flex items-center justify-center rounded-md border text-xs ${editing ? 'border-brand-500 bg-brand-50 text-brand-600' : unsettled ? 'border-red-300 text-red-600' : 'border-stone-200 text-stone-500'} hover:bg-stone-50`}>₹ Payment</button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Inline payment-mode editor */}
+                    {editing && (
+                      <div className="mt-2 pt-2 border-t border-stone-100 space-y-2">
+                        <div className="grid grid-cols-3 gap-1.5">
+                          {PAY_MODES.map(([mk, ml]) => (
+                            <button key={mk} disabled={busy} onClick={() => { if (mk === 'part') { setPayMode('part'); setPayEditAmt('') } else applyPayment(o.id, mk, 0) }}
+                              className={`py-1.5 rounded-lg border text-xs ${mk === 'part' && payMode === 'part' ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-stone-200 text-stone-600 hover:bg-stone-50'}`}>{ml}</button>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input type="number" min="0" value={payEditAmt} onChange={e => setPayEditAmt(e.target.value)} placeholder={`Part amount (of ₹${parseFloat(o.total).toFixed(0)})`} className="flex-1 text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                          <button disabled={busy || !payEditAmt} onClick={() => applyPayment(o.id, 'part', payEditAmt)} className="btn-primary py-1.5 px-3 rounded-lg text-xs">Save part</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )
               })}
@@ -337,7 +439,6 @@ export default function AdminDineIn() {
               const taxable = Math.max(0, sub - disc)
               const half = complimentary ? 0 : taxable * 0.025
               const grand = complimentary ? 0 : Math.round(taxable * 1.05)
-              const cash = Math.min(Number(cashAmt) || 0, grand)
               return (
                 <div className="p-4 space-y-4">
                   <div className="card p-4 space-y-1.5 text-sm">
@@ -357,24 +458,31 @@ export default function AdminDineIn() {
                           <input type="number" min="0" value={discount} onChange={e => setDiscount(e.target.value)} placeholder="0" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
                         </div>
                         <div>
-                          <div className="text-xs text-stone-400 mb-1">Payment</div>
+                          <div className="text-xs text-stone-400 mb-1">Payment mode</div>
                           <div className="grid grid-cols-3 gap-2">
-                            {[['cash', 'Cash'], ['upi', 'UPI / Card'], ['split', 'Split']].map(([m, label]) => (
+                            {PAY_MODES.map(([m, label]) => (
                               <button key={m} onClick={() => setPayMode(m)} className={`py-2 rounded-lg border text-sm ${payMode === m ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-stone-200 text-stone-600'}`}>{label}</button>
                             ))}
                           </div>
-                          {payMode === 'split' && (
-                            <div className="grid grid-cols-2 gap-2 mt-2">
-                              <div><label className="text-xs text-stone-400">Cash ₹</label><input type="number" min="0" value={cashAmt} onChange={e => setCashAmt(e.target.value)} className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" /></div>
-                              <div><label className="text-xs text-stone-400">UPI ₹</label><input disabled value={(grand - cash).toFixed(0)} className="w-full text-sm bg-stone-100 border border-stone-200 rounded-lg px-3 py-2 text-stone-500" /></div>
+                          {payMode === 'part' && (
+                            <div className="mt-2">
+                              <label className="text-xs text-stone-400">Amount received now (₹)</label>
+                              <input type="number" min="0" max={grand} value={partAmt} onChange={e => setPartAmt(e.target.value)} placeholder="0" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                              <div className="text-[11px] text-red-600 mt-1">₹{Math.max(0, grand - (Number(partAmt) || 0)).toFixed(0)} will remain due</div>
                             </div>
                           )}
+                          {payMode === 'due' && <div className="text-[11px] text-red-600 mt-2">Bill will be generated and left UNSETTLED (₹{grand.toFixed(0)} due).</div>}
                         </div>
                       </>
                     )}
                   </div>
 
-                  <button disabled={busy} onClick={doSettle} className="btn-primary w-full justify-center py-3 rounded-xl">{complimentary ? 'Mark complimentary' : `Settle ₹${grand.toFixed(0)}`}</button>
+                  <button disabled={busy} onClick={doSettle} className="btn-primary w-full justify-center py-3 rounded-xl">
+                    {complimentary ? 'Mark complimentary'
+                      : payMode === 'due' ? `Generate bill — Due ₹${grand.toFixed(0)}`
+                      : payMode === 'part' ? `Generate bill — Part (₹${(Number(partAmt) || 0).toFixed(0)} now)`
+                      : `Settle ₹${grand.toFixed(0)} — ${MODE_LABEL[payMode]}`}
+                  </button>
                   <button onClick={() => setSettleOpen(false)} className="btn-ghost w-full justify-center text-stone-500">← Back</button>
                 </div>
               )
@@ -448,10 +556,25 @@ export default function AdminDineIn() {
                         </div>
                       )}
 
-                      {isCounter && (
-                        <div className="grid grid-cols-2 gap-2">
-                          <button disabled={busy} onClick={() => counterCheckout('CASH_ON_DELIVERY')} className="btn-primary justify-center py-3 rounded-xl">Cash &amp; Print</button>
-                          <button disabled={busy} onClick={() => counterCheckout('QR_UPI')} className="btn-primary justify-center py-3 rounded-xl">UPI &amp; Print</button>
+                      {isCounter && pendingArr.length > 0 && (
+                        <div className="card p-4 space-y-3">
+                          <div className="text-xs text-stone-400">Payment mode</div>
+                          <div className="grid grid-cols-3 gap-2">
+                            {PAY_MODES.map(([m, label]) => (
+                              <button key={m} onClick={() => setPayMode(m)} className={`py-2 rounded-lg border text-sm ${payMode === m ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-stone-200 text-stone-600'}`}>{label}</button>
+                            ))}
+                          </div>
+                          {payMode === 'part' && (
+                            <div>
+                              <label className="text-xs text-stone-400">Amount received now (₹)</label>
+                              <input type="number" min="0" value={partAmt} onChange={e => setPartAmt(e.target.value)} placeholder="0" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                            </div>
+                          )}
+                          <button disabled={busy} onClick={() => counterCheckout(payMode)} className="btn-primary w-full justify-center py-3 rounded-xl">
+                            {payMode === 'due' ? `Generate bill — Due ₹${pendingTotals.total.toFixed(0)}`
+                              : payMode === 'part' ? 'Generate bill — Part & Print'
+                              : `Settle ₹${pendingTotals.total.toFixed(0)} — ${MODE_LABEL[payMode]} & Print`}
+                          </button>
                         </div>
                       )}
                       {isDineIn && activeOrder && (
