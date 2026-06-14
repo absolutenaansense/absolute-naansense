@@ -15,6 +15,7 @@ import PrivacyPage from './pages/customer/PrivacyPage'
 import ContactPage from './pages/customer/ContactPage'
 import RefundPage from './pages/customer/RefundPage'
 import FloatingContact from './components/customer/FloatingContact'
+import CopyPage from './pages/CopyPage'
 
 // Staff panels (role-based)
 import PanelGate from './staff/PanelGate'
@@ -45,6 +46,9 @@ export default function App() {
     <>
     {CUSTOMER_ENABLED && <FloatingContact />}
     <Routes>
+      {/* Public, host-agnostic — used by the order-email "Copy details" button */}
+      <Route path="/copy" element={<CopyPage />} />
+
       {/* Customer routes — browsing is public; only orders/profile need login */}
       {CUSTOMER_ENABLED && (
         <>

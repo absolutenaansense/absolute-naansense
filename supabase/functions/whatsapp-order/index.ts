@@ -75,11 +75,13 @@ function detailsText(order: any): string {
 async function sendEmail(to: string, order: any) {
   const subj = `New ${order.orderType === 'TAKEAWAY' ? 'takeaway' : 'delivery'} order — ${outletName(order.outlet)} — ₹${parseFloat(order.total).toFixed(0)}`
   const block = detailsText(order)
+  const copyUrl = `https://absolutenaansense.in/copy#${encodeURIComponent(block)}`
   const html = `
     <div style="font-family:system-ui,Arial,sans-serif;max-width:560px;margin:auto;color:#1c1917">
       <h2 style="color:#4d7c0f;margin-bottom:4px">🔔 New online order — ${esc(outletName(order.outlet))}</h2>
       <p style="color:#78716c;margin-top:0">${esc(istTime(order.createdAt))}</p>
-      <p style="margin:14px 0 6px;font-weight:600">📋 Order details (select the box below and copy):</p>
+      <a href="${copyUrl}" style="display:inline-block;background:#4d7c0f;color:#fff;text-decoration:none;font-weight:600;padding:10px 16px;border-radius:10px;margin:10px 0">📋 Copy order details</a>
+      <p style="margin:10px 0 6px;color:#78716c;font-size:13px">…or select the box below and copy:</p>
       <pre style="white-space:pre-wrap;background:#f5f5f4;border:1px solid #e7e5e4;border-radius:10px;padding:14px;font-size:13px;line-height:1.5;user-select:all;-webkit-user-select:all">${esc(block)}</pre>
       <p style="color:#a8a29e;font-size:12px">Absolute Naansense — automated order notification.</p>
     </div>`

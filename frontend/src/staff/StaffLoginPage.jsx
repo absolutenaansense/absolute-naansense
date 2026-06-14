@@ -41,13 +41,15 @@ export default function StaffLoginPage({ panel }) {
         <div className="bg-stone-800 border border-stone-700 rounded-2xl p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-stone-400 mb-1.5">Email</label>
+              <label className="block text-xs font-medium text-stone-400 mb-1.5">User ID</label>
               <div className="relative">
                 <Mail size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500" />
                 <input
                   className="w-full pl-9 pr-3.5 py-2.5 rounded-xl bg-stone-700 border border-stone-600 text-white text-sm placeholder-stone-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-                  type="email"
-                  placeholder="name@absolutenaansense.in"
+                  type="text"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  placeholder="Your login ID"
                   value={form.email}
                   onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
                   required
