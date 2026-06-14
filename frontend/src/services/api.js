@@ -102,6 +102,27 @@ export const authApi = {
     return { data: { success: true } }
   },
 
+  // Forgot password via emailed OTP. Step 1: email a 6-digit code.
+  sendResetOtp: async (email) => {
+    const { data, error } = await supabase.functions.invoke('email-otp', { body: { action: 'send', email } })
+    if (error) { let m = 'Could not send code'; try { m = (await error.context.json()).error || m } catch {} throw { response: { data: { error: m } } } }
+    if (data?.error) throw { response: { data: { error: data.error } } }
+    return { data }
+  },
+
+  // Step 2: verify the OTP, then set the new password (hash client-side as elsewhere).
+  resetWithOtp: async ({ email, code, newPassword }) => {
+    const { data, error } = await supabase.functions.invoke('email-otp', { body: { action: 'verify', email, code } })
+    if (error) { let m = 'Verification failed'; try { m = (await error.context.json()).error || m } catch {} throw { response: { data: { error: m } } } }
+    if (data?.error || !data?.ok) throw { response: { data: { error: data?.error || 'Verification failed' } } }
+    const { data: user } = await supabase.from('User').select('id').ilike('email', (email || '').trim()).maybeSingle()
+    if (!user) throw { response: { data: { error: 'Account not found' } } }
+    const passwordHash = await bcrypt.hash(newPassword, 10)
+    const { error: uErr } = await supabase.from('User').update({ passwordHash, updatedAt: new Date().toISOString() }).eq('id', user.id)
+    if (uErr) throw { response: { data: { error: uErr.message } } }
+    return { data: { success: true } }
+  },
+
   // Change password for a logged-in staff/admin account.
   adminChangePassword: async ({ adminId, currentPassword, newPassword }) => {
     const { data: admin, error } = await supabase.from('Admin').select('passwordHash').eq('id', adminId).single()
@@ -485,7 +506,7 @@ export const reportsApi = {
     const since = new Date(Date.now() - 120 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('Order')
-      .select('id, billNo, outlet, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentMode, settled, paidAmount, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, deleted, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
+      .select('id, billNo, outlet, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentMode, settled, paidAmount, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, deleted, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name, category:Category(name)))')
       .neq('deleted', true)
       .gte('createdAt', since)
       .order('createdAt', { ascending: false })

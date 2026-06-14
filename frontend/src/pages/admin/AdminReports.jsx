@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Download, RefreshCw, Receipt, Eye, Printer, Pencil, Trash2, X, Minus, Plus } from 'lucide-react'
+import { Download, RefreshCw, Receipt, Eye, Printer, Pencil, Trash2, X, Minus, Plus, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { reportsApi, dineApi, ordersApi } from '../../services/api'
@@ -44,6 +44,8 @@ export default function AdminReports() {
   const [statusView, setStatusView] = useState('successful')  // successful | cancelled | all
   const [payView, setPayView] = useState('all')               // all | cash | upi | card | online | part | due
   const [reportTab, setReportTab] = useState('sales')         // sales | summary | items
+  const [itemSortKey, setItemSortKey] = useState('qty')       // name | qty | amount
+  const [itemSortDir, setItemSortDir] = useState('desc')
   const activeOutlet = staff?.outlet || outletFilter
   const isBiller = staff?.kind === 'biller'   // billers get a read-only report (no modify/delete)
   const isSuper = staff?.isSuper              // only super admin can delete (hide) an order
@@ -133,18 +135,36 @@ export default function AdminReports() {
     return m
   }, [rows])
 
-  // --- Sub-report: Item-wise (qty + amount per menu item, successful sales) ---
+  // --- Sub-report: Item-wise (qty + amount per menu item, grouped by category) ---
   const itemRows = (() => {
     const m = {}
     sales.forEach(r => (r.items || []).forEach(it => {
       const name = it.menuItem?.name || it.itemName || 'Item'
-      if (!m[name]) m[name] = { name, qty: 0, amount: 0 }
-      m[name].qty += it.quantity || 0
-      m[name].amount += parseFloat(it.price || 0) * (it.quantity || 0)
+      const category = it.menuItem?.category?.name || 'Other'
+      const key = category + '||' + name
+      if (!m[key]) m[key] = { name, category, qty: 0, amount: 0 }
+      m[key].qty += it.quantity || 0
+      m[key].amount += parseFloat(it.price || 0) * (it.quantity || 0)
     }))
-    return Object.values(m).sort((a, b) => b.qty - a.qty)
+    return Object.values(m)
   })()
   const itemTotals = itemRows.reduce((a, r) => ({ qty: a.qty + r.qty, amount: a.amount + r.amount }), { qty: 0, amount: 0 })
+  // Group the items by category, sorted by the chosen column/direction.
+  const cmp = (a, b) => {
+    const dir = itemSortDir === 'asc' ? 1 : -1
+    if (itemSortKey === 'name') return a.name.localeCompare(b.name) * dir
+    return (a[itemSortKey] - b[itemSortKey]) * dir
+  }
+  const itemGroups = Object.entries(itemRows.reduce((g, r) => { (g[r.category] ||= []).push(r); return g }, {}))
+    .map(([category, rows]) => ({
+      category,
+      rows: [...rows].sort(cmp),
+      qty: rows.reduce((s, r) => s + r.qty, 0),
+      amount: rows.reduce((s, r) => s + r.amount, 0),
+    }))
+    .sort((a, b) => b.amount - a.amount)
+  const toggleSort = (k) => { if (itemSortKey === k) setItemSortDir(d => d === 'asc' ? 'desc' : 'asc'); else { setItemSortKey(k); setItemSortDir(k === 'name' ? 'asc' : 'desc') } }
+  const sortIcon = (k) => itemSortKey !== k ? <ArrowUpDown size={12} className="inline opacity-40" /> : itemSortDir === 'asc' ? <ArrowUp size={12} className="inline" /> : <ArrowDown size={12} className="inline" />
 
   // --- Sub-report: Order summary (breakdowns over successful sales) ---
   const typeSummary = [['DINE_IN', 'Dine-in'], ['TAKEAWAY', 'Take Away'], ['DELIVERY', 'Delivery']].map(([t, label]) => {
@@ -162,8 +182,8 @@ export default function AdminReports() {
     let head, lines, prefix
     if (reportTab === 'items') {
       prefix = 'items'
-      head = ['Item', 'Qty sold', 'Amount']
-      lines = itemRows.map(r => [r.name, r.qty, r.amount.toFixed(2)])
+      head = ['Category', 'Item', 'Qty sold', 'Amount']
+      lines = itemGroups.flatMap(g => g.rows.map(r => [g.category, r.name, r.qty, r.amount.toFixed(2)]))
     } else if (reportTab === 'summary') {
       prefix = 'summary'
       head = ['Group', 'Label', 'Count', 'Amount']
@@ -382,22 +402,35 @@ export default function AdminReports() {
         </div>
       )}
 
-      {/* Item-wise sub-report */}
+      {/* Item-wise sub-report (grouped by category, sortable) */}
       {reportTab === 'items' && (
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-stone-50 text-stone-500 text-left">
-              <tr><th className="px-4 py-2 font-medium">Item</th><th className="px-4 py-2 font-medium text-right">Qty sold</th><th className="px-4 py-2 font-medium text-right">Amount</th></tr>
+              <tr>
+                <th className="px-4 py-2 font-medium cursor-pointer select-none hover:text-stone-700" onClick={() => toggleSort('name')}>Item {sortIcon('name')}</th>
+                <th className="px-4 py-2 font-medium text-right cursor-pointer select-none hover:text-stone-700" onClick={() => toggleSort('qty')}>Qty sold {sortIcon('qty')}</th>
+                <th className="px-4 py-2 font-medium text-right cursor-pointer select-none hover:text-stone-700" onClick={() => toggleSort('amount')}>Amount {sortIcon('amount')}</th>
+              </tr>
             </thead>
             <tbody>
               {isLoading ? <tr><td colSpan={3} className="text-center py-8 text-stone-400">Loading…</td></tr>
-                : itemRows.length === 0 ? <tr><td colSpan={3} className="text-center py-8 text-stone-400">No items in this period</td></tr>
-                : itemRows.map(r => (
-                  <tr key={r.name} className="border-t border-stone-50">
-                    <td className="px-4 py-2 text-stone-700">{r.name}</td>
-                    <td className="px-4 py-2 text-right font-medium">{r.qty}</td>
-                    <td className="px-4 py-2 text-right">₹{r.amount.toFixed(0)}</td>
-                  </tr>
+                : itemGroups.length === 0 ? <tr><td colSpan={3} className="text-center py-8 text-stone-400">No items in this period</td></tr>
+                : itemGroups.map(g => (
+                  <Fragment key={g.category}>
+                    <tr className="bg-stone-100/70">
+                      <td className="px-4 py-1.5 font-semibold text-stone-600 text-xs uppercase tracking-wide">{g.category}</td>
+                      <td className="px-4 py-1.5 text-right font-semibold text-stone-600">{g.qty}</td>
+                      <td className="px-4 py-1.5 text-right font-semibold text-stone-600">₹{g.amount.toFixed(0)}</td>
+                    </tr>
+                    {g.rows.map(r => (
+                      <tr key={g.category + r.name} className="border-t border-stone-50">
+                        <td className="px-4 py-2 text-stone-700 pl-6">{r.name}</td>
+                        <td className="px-4 py-2 text-right font-medium">{r.qty}</td>
+                        <td className="px-4 py-2 text-right">₹{r.amount.toFixed(0)}</td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
             </tbody>
             {itemRows.length > 0 && (
