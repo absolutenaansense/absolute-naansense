@@ -16,6 +16,7 @@ import PrivacyPage from './pages/customer/PrivacyPage'
 import PanelGate from './staff/PanelGate'
 import AdminMonitorApp from './staff/AdminMonitorApp'
 import BillerApp from './staff/BillerApp'
+import StaffLanding from './staff/StaffLanding'
 
 function CustomerRoute({ children }) {
   const { user } = useAuthStore()
@@ -55,6 +56,9 @@ export default function App() {
       {/* Staff panels — each has its own role/outlet-checked login */}
       {STAFF_ENABLED && (
         <>
+          {/* On the staff-only host (.in), the root is the landing page. */}
+          {!CUSTOMER_ENABLED && <Route path="/" element={<StaffLanding />} />}
+          <Route path="/staff" element={<StaffLanding />} />
           <Route path="/super_admin/*" element={<PanelGate panelKey="super_admin"><AdminMonitorApp /></PanelGate>} />
           <Route path="/renukoot_admin/*" element={<PanelGate panelKey="renukoot_admin"><AdminMonitorApp /></PanelGate>} />
           <Route path="/renusagar_admin/*" element={<PanelGate panelKey="renusagar_admin"><AdminMonitorApp /></PanelGate>} />
@@ -65,7 +69,7 @@ export default function App() {
       )}
 
       {/* Anything else → the home for this domain (staff landing on .in, ordering on .com) */}
-      <Route path="*" element={<Navigate to={STAFF_ENABLED && !CUSTOMER_ENABLED ? '/super_admin' : '/'} replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }
