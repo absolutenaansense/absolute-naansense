@@ -10,6 +10,7 @@ import { UPI_APPS, UPI_PAYEE, upiLink } from '../../components/customer/payApps'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
+import { supabase } from '../../services/supabase'
 import { formatIST } from '../../utils/dateIST'
 import { buildCustomerNotes } from '../../utils/orderNotes'
 import { RESTAURANT } from '../../config/restaurant'
@@ -183,6 +184,23 @@ export default function CheckoutPage() {
     setConfirmOpen(true)
   }
 
+  // Open Cashfree checkout for an order and verify the payment server-side.
+  const payWithCashfree = async (orderId) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('cashfree', { body: { action: 'create', orderId } })
+      if (error || !data?.paymentSessionId) { toast.error(data?.error || 'Could not start the payment'); return false }
+      if (typeof window === 'undefined' || !window.Cashfree) { toast.error('Payment is loading — please try again in a moment.'); return false }
+      const cashfree = window.Cashfree({ mode: 'production' })
+      await cashfree.checkout({ paymentSessionId: data.paymentSessionId, redirectTarget: '_modal' })
+      // Verify authoritatively (don't trust the client result).
+      const { data: st } = await supabase.functions.invoke('cashfree', { body: { action: 'status', orderId } })
+      return st?.paid === true
+    } catch {
+      toast.error('Payment could not be completed')
+      return false
+    }
+  }
+
   const handlePlaceOrder = async () => {
     if (!requireLogin()) return
     if (!hoursValid()) return
@@ -217,6 +235,12 @@ export default function CheckoutPage() {
         pickupAt,
         notes: buildCustomerNotes({ text: orderNote, outlet }),
       })
+      // Online payment → open Cashfree. Abort to confirmation only if it succeeds.
+      if (pm === 'QR_UPI') {
+        const paid = await payWithCashfree(data.id)
+        if (!paid) { toast.error('Payment was not completed. Please try again.'); setConfirming(false); return }
+        setPaymentState('paid')
+      }
       // Snapshot the order for the WhatsApp image (cart is cleared right after).
       setPlacedSnapshot({
         ref: data.id, name: user?.name || null, phone: user?.phone || null, address: addressText,
@@ -529,8 +553,8 @@ export default function CheckoutPage() {
                     <div className="flex items-center gap-3">
                       <QrCode size={20} className="text-stone-500" />
                       <div>
-                        <div className="text-sm font-medium text-stone-800">Pay via QR / UPI</div>
-                        <div className="text-xs text-stone-500">Scan & pay — order confirmed after restaurant verifies</div>
+                        <div className="text-sm font-medium text-stone-800">Pay online — UPI, Cards, Wallets</div>
+                        <div className="text-xs text-stone-500">Secure payment via Cashfree · order confirmed instantly</div>
                       </div>
                     </div>
                     {paymentMethod === 'QR_UPI' && <Check size={16} className="text-brand-500" />}
@@ -562,41 +586,9 @@ export default function CheckoutPage() {
           </div>
 
           {paymentMethod === 'QR_UPI' && (
-            <div className="card p-4">
-              <div className="text-sm font-semibold text-stone-800 mb-1 text-center">Pay ₹{total.toFixed(0)} via UPI</div>
-              <div className="text-xs text-stone-400 mb-4 text-center">Tap your preferred app — amount is pre-filled</div>
-
-              {/* UPI app buttons */}
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                {UPI_APPS.map(app => (
-                  <a
-                    key={app.name}
-                    href={upiLink(app, total)}
-                    className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-brand-200 rounded-2xl p-3.5 transition-all active:scale-95"
-                  >
-                    <app.Logo />
-                    <span className="text-sm font-semibold text-stone-700">{app.name}</span>
-                  </a>
-                ))}
-              </div>
-
-              {/* UPI ID as fallback */}
-              <div className="bg-stone-50 rounded-xl p-3 flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-stone-400">UPI ID (manual)</div>
-                  <div className="text-sm font-mono font-semibold text-stone-800">{UPI_PAYEE}</div>
-                </div>
-                <button
-                  onClick={() => { navigator.clipboard.writeText(UPI_PAYEE); toast.success('UPI ID copied!'); }}
-                  className="text-xs text-brand-500 font-medium bg-brand-50 px-3 py-1.5 rounded-lg"
-                >
-                  Copy
-                </button>
-              </div>
-
-              <div className="mt-3 text-xs text-amber-600 bg-amber-50 rounded-xl p-2.5 text-center">
-                After paying, tap <strong>"Place order"</strong> below and then <strong>"I've paid"</strong>
-              </div>
+            <div className="card p-4 text-center">
+              <div className="text-sm font-semibold text-stone-800 mb-1">Secure online payment</div>
+              <div className="text-xs text-stone-500">When you place the order, a secure Cashfree window opens to pay ₹{total.toFixed(0)} by UPI, card, net-banking or wallet. Your order is confirmed automatically once payment succeeds.</div>
             </div>
           )}
 
