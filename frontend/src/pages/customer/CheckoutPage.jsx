@@ -82,8 +82,11 @@ export default function CheckoutPage() {
   }
 
   const subtotal = getTotal()
-  // No delivery charge on take-away orders.
-  const deliveryFee = orderType === 'DELIVERY' && subtotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0
+  // Test order: only the ₹1 test item in the cart → waive the delivery fee.
+  const cartItems = Object.values(items)
+  const isTestOrder = cartItems.length > 0 && cartItems.every(({ item }) => parseFloat(item.price) <= 1)
+  // No delivery charge on take-away orders (or test orders).
+  const deliveryFee = (orderType === 'DELIVERY' && subtotal < FREE_DELIVERY_THRESHOLD && !isTestOrder) ? DELIVERY_FEE : 0
   const gst = Math.round(subtotal * GST_RATE)
   const total = subtotal + deliveryFee + gst
 
