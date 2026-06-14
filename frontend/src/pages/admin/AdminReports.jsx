@@ -24,6 +24,15 @@ const payLabel = (o) => o.paymentMethod === 'QR_UPI' ? 'UPI'
   : o.paymentMethod === 'COMPLIMENTARY' ? 'Comp'
   : 'Cash'
 
+// Payment category for the filter: in-store cash/UPI/card vs the online gateway.
+const isPosOrder = (o) => o.user?.phone === '0000000000' || !!o.tableLabel
+const payCategory = (o) => {
+  if (o.paymentMethod === 'CASH_ON_DELIVERY' || o.paymentMethod === 'COMPLIMENTARY') return 'cash'
+  if (o.paymentMethod === 'CARD') return 'card'
+  if (o.paymentMethod === 'QR_UPI') return isPosOrder(o) ? 'upi' : 'gateway' // online QR_UPI = Cashfree gateway
+  return 'other'
+}
+
 export default function AdminReports() {
   const staff = useStaff()
   const [preset, setPreset] = useState('today')
@@ -31,6 +40,8 @@ export default function AdminReports() {
   const [to, setTo] = useState(todayIST())
   const [billNo, setBillNo] = useState('')
   const [outletFilter, setOutletFilter] = useState(staff?.outlet || 'all')
+  const [statusView, setStatusView] = useState('successful')  // successful | cancelled | all
+  const [payView, setPayView] = useState('all')               // all | cash | upi | gateway | card
   const activeOutlet = staff?.outlet || outletFilter
   const isBiller = staff?.kind === 'biller'   // billers get a read-only report (no modify/delete)
   const isSuper = staff?.isSuper              // only super admin can delete (hide) an order
@@ -103,6 +114,17 @@ export default function AdminReports() {
   const cashTotal = sales.filter(r => payLabel(r) === 'Cash' && r.paymentStatus === 'paid').reduce((a, r) => a + r.grand, 0)
   const upiTotal = sales.filter(r => payLabel(r) === 'UPI' && r.paymentStatus === 'paid').reduce((a, r) => a + r.grand, 0)
 
+  // Rows shown in the table — filtered by the status + payment dropdowns.
+  const tableRows = rows.filter(r => {
+    const statusOk = statusView === 'all' ? true : statusView === 'cancelled' ? r.status === 'cancelled' : r.status !== 'cancelled'
+    const payOk = payView === 'all' ? true : payCategory(r) === payView
+    return statusOk && payOk
+  })
+  const tableSales = tableRows.filter(r => r.status !== 'cancelled')
+  const tableTot = tableSales.reduce((a, r) => ({
+    subtotal: a.subtotal + r.subtotal, cgst: a.cgst + r.cgst, sgst: a.sgst + r.sgst, grand: a.grand + r.grand,
+  }), { subtotal: 0, cgst: 0, sgst: 0, grand: 0 })
+
   const statusCounts = useMemo(() => {
     const m = {}
     rows.forEach(r => { m[r.status] = (m[r.status] || 0) + 1 })
@@ -111,8 +133,9 @@ export default function AdminReports() {
 
   const exportCsv = () => {
     const head = ['Bill No', 'Date', 'Order Type', 'Payment', 'Status', 'Sub Total', 'CGST', 'SGST', 'Total']
-    const lines = sales.map(r => [
-      r.billNo ?? '', formatIST(r.createdAt, 'dd-MM-yyyy HH:mm'), typeLabel(r.meta), payLabel(r), r.paymentStatus,
+    const lines = tableRows.map(r => [
+      r.billNo ?? '', formatIST(r.createdAt, 'dd-MM-yyyy HH:mm'), typeLabel(r.meta), payLabel(r),
+      r.status === 'cancelled' ? 'cancelled' : r.paymentStatus,
       r.subtotal.toFixed(2), r.cgst.toFixed(2), r.sgst.toFixed(2), r.grand.toFixed(2),
     ])
     const csv = [head, ...lines].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n')
@@ -135,6 +158,18 @@ export default function AdminReports() {
               <option value="renusagar">Renusagar</option>
             </select>
           )}
+          <select value={statusView} onChange={e => setStatusView(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
+            <option value="successful">Successful orders</option>
+            <option value="cancelled">Cancelled orders</option>
+            <option value="all">All orders</option>
+          </select>
+          <select value={payView} onChange={e => setPayView(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
+            <option value="all">All payments</option>
+            <option value="cash">Cash</option>
+            <option value="upi">UPI</option>
+            <option value="gateway">Payment gateway</option>
+            <option value="card">Card</option>
+          </select>
           <select value={preset} onChange={e => applyPreset(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
             {TIMELINE_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
           </select>
@@ -195,9 +230,9 @@ export default function AdminReports() {
             <tbody>
               {isLoading ? (
                 <tr><td colSpan={10} className="text-center py-8 text-stone-400">Loading…</td></tr>
-              ) : rows.length === 0 ? (
-                <tr><td colSpan={10} className="text-center py-8 text-stone-400">No orders in this period</td></tr>
-              ) : rows.map(r => {
+              ) : tableRows.length === 0 ? (
+                <tr><td colSpan={10} className="text-center py-8 text-stone-400">No orders match this filter</td></tr>
+              ) : tableRows.map(r => {
                 const isCancelled = r.status === 'cancelled'
                 return (
                 <tr key={r.id} className={`border-t border-stone-50 ${isCancelled ? 'bg-red-50/40' : ''}`}>
@@ -227,14 +262,14 @@ export default function AdminReports() {
                 )
               })}
             </tbody>
-            {sales.length > 0 && (
+            {tableSales.length > 0 && (
               <tfoot className="bg-stone-50 font-semibold">
                 <tr>
-                  <td className="px-3 py-2" colSpan={5}>Total ({sales.length})</td>
-                  <td className="px-3 py-2">₹{tot.subtotal.toFixed(2)}</td>
-                  <td className="px-3 py-2">₹{tot.cgst.toFixed(2)}</td>
-                  <td className="px-3 py-2">₹{tot.sgst.toFixed(2)}</td>
-                  <td className="px-3 py-2">₹{tot.grand.toFixed(2)}</td>
+                  <td className="px-3 py-2" colSpan={5}>Total ({tableSales.length})</td>
+                  <td className="px-3 py-2">₹{tableTot.subtotal.toFixed(2)}</td>
+                  <td className="px-3 py-2">₹{tableTot.cgst.toFixed(2)}</td>
+                  <td className="px-3 py-2">₹{tableTot.sgst.toFixed(2)}</td>
+                  <td className="px-3 py-2">₹{tableTot.grand.toFixed(2)}</td>
                   <td></td>
                 </tr>
               </tfoot>
