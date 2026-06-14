@@ -23,31 +23,47 @@ function CustomerRoute({ children }) {
   return user ? children : <Navigate to="/login" replace state={{ from: location.pathname }} />
 }
 
+// Domain split: customers on absolutenaansense.com, staff/backend on
+// absolutenaansense.in. On any other host (localhost, *.github.io preview) both
+// are available so the single codebase can be developed/previewed.
+const HOST = (typeof window !== 'undefined' ? window.location.hostname : '').toLowerCase()
+const IS_IN = HOST.endsWith('absolutenaansense.in')
+const IS_COM = HOST.endsWith('absolutenaansense.com')
+const CUSTOMER_ENABLED = !IS_IN
+const STAFF_ENABLED = !IS_COM
+
 export default function App() {
   return (
     <Routes>
       {/* Customer routes — browsing is public; only orders/profile need login */}
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="/terms" element={<TermsPage />} />
-      <Route path="/privacy" element={<PrivacyPage />} />
-      <Route path="/" element={<OutletSelectPage />} />
-      <Route path="/menu" element={<MenuPage />} />
-      <Route path="/checkout" element={<CheckoutPage />} />
-      <Route path="/orders" element={<CustomerRoute><OrdersPage /></CustomerRoute>} />
-      <Route path="/profile" element={<CustomerRoute><ProfilePage /></CustomerRoute>} />
+      {CUSTOMER_ENABLED && (
+        <>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/" element={<OutletSelectPage />} />
+          <Route path="/menu" element={<MenuPage />} />
+          <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/orders" element={<CustomerRoute><OrdersPage /></CustomerRoute>} />
+          <Route path="/profile" element={<CustomerRoute><ProfilePage /></CustomerRoute>} />
+        </>
+      )}
 
       {/* Staff panels — each has its own role/outlet-checked login */}
-      <Route path="/super_admin/*" element={<PanelGate panelKey="super_admin"><AdminMonitorApp /></PanelGate>} />
-      <Route path="/renukoot_admin/*" element={<PanelGate panelKey="renukoot_admin"><AdminMonitorApp /></PanelGate>} />
-      <Route path="/renusagar_admin/*" element={<PanelGate panelKey="renusagar_admin"><AdminMonitorApp /></PanelGate>} />
-      <Route path="/renukoot_biller/*" element={<PanelGate panelKey="renukoot_biller"><BillerApp /></PanelGate>} />
-      <Route path="/renusagar_biller/*" element={<PanelGate panelKey="renusagar_biller"><BillerApp /></PanelGate>} />
+      {STAFF_ENABLED && (
+        <>
+          <Route path="/super_admin/*" element={<PanelGate panelKey="super_admin"><AdminMonitorApp /></PanelGate>} />
+          <Route path="/renukoot_admin/*" element={<PanelGate panelKey="renukoot_admin"><AdminMonitorApp /></PanelGate>} />
+          <Route path="/renusagar_admin/*" element={<PanelGate panelKey="renusagar_admin"><AdminMonitorApp /></PanelGate>} />
+          <Route path="/renukoot_biller/*" element={<PanelGate panelKey="renukoot_biller"><BillerApp /></PanelGate>} />
+          <Route path="/renusagar_biller/*" element={<PanelGate panelKey="renusagar_biller"><BillerApp /></PanelGate>} />
+          <Route path="/admin/*" element={<Navigate to="/super_admin" replace />} />
+        </>
+      )}
 
-      {/* Legacy admin path → super admin */}
-      <Route path="/admin/*" element={<Navigate to="/super_admin" replace />} />
-
-      <Route path="*" element={<Navigate to="/" replace />} />
+      {/* Anything else → the home for this domain (staff landing on .in, ordering on .com) */}
+      <Route path="*" element={<Navigate to={STAFF_ENABLED && !CUSTOMER_ENABLED ? '/super_admin' : '/'} replace />} />
     </Routes>
   )
 }
