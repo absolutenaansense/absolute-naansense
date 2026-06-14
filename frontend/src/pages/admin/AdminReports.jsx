@@ -19,19 +19,20 @@ const todayIST = () => formatIST(new Date().toISOString(), 'yyyy-MM-dd')
 const yesterdayIST = () => formatIST(new Date(Date.now() - 86400000).toISOString(), 'yyyy-MM-dd')
 
 const typeLabel = (m) => m.type === 'DINE_IN' ? `Dine-in${m.table ? ` (${m.table})` : ''}` : m.type === 'TAKEAWAY' ? 'Take Away' : 'Delivery'
-const payLabel = (o) => o.paymentMethod === 'QR_UPI' ? 'UPI'
-  : o.paymentMethod === 'SPLIT' ? 'Split'
-  : o.paymentMethod === 'COMPLIMENTARY' ? 'Comp'
-  : 'Cash'
 
-// Payment category for the filter: in-store cash/UPI/card vs the online gateway.
+// Payment categories mirror the POS payment modes (paymentMode column).
+const MODE_LABEL = { cash: 'Cash', upi: 'UPI', card: 'Card', online: 'Online', part: 'Part', due: 'Due', comp: 'Comp', split: 'Split' }
 const isPosOrder = (o) => o.user?.phone === '0000000000' || !!o.tableLabel
+// Prefer the explicit confirmed mode; fall back to legacy paymentMethod for old rows.
 const payCategory = (o) => {
-  if (o.paymentMethod === 'CASH_ON_DELIVERY' || o.paymentMethod === 'COMPLIMENTARY') return 'cash'
+  if (o.paymentMode) return o.paymentMode
   if (o.paymentMethod === 'CARD') return 'card'
-  if (o.paymentMethod === 'QR_UPI') return isPosOrder(o) ? 'upi' : 'gateway' // online QR_UPI = Cashfree gateway
-  return 'other'
+  if (o.paymentMethod === 'QR_UPI') return isPosOrder(o) ? 'upi' : 'online'
+  if (o.paymentMethod === 'COMPLIMENTARY') return 'comp'
+  if (o.paymentMethod === 'SPLIT') return 'split'
+  return 'cash'
 }
+const payLabel = (o) => MODE_LABEL[payCategory(o)] || 'Cash'
 
 export default function AdminReports() {
   const staff = useStaff()
@@ -167,8 +168,10 @@ export default function AdminReports() {
             <option value="all">All payments</option>
             <option value="cash">Cash</option>
             <option value="upi">UPI</option>
-            <option value="gateway">Payment gateway</option>
             <option value="card">Card</option>
+            <option value="online">Online</option>
+            <option value="part">Part</option>
+            <option value="due">Due</option>
           </select>
           <select value={preset} onChange={e => applyPreset(e.target.value)} className="text-xs border border-stone-200 rounded-lg px-2 py-1.5">
             {TIMELINE_PRESETS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}

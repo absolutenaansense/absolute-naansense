@@ -46,6 +46,9 @@ const PAY_MODES = [['cash', 'Cash'], ['upi', 'UPI'], ['card', 'Card'], ['online'
 const MODE_LABEL = Object.fromEntries(PAY_MODES)
 const RECENT_TABS = [['unbilled', 'Unbilled'], ['DINE_IN', 'Dine-in'], ['TAKEAWAY', 'Takeaway'], ['DELIVERY', 'Delivery']]
 const outstandingOf = (o) => Math.max(0, (parseFloat(o.total) || 0) - (parseFloat(o.paidAmount) || 0))
+// Part/Due leave money owed, so the customer must be identifiable.
+const needsContact = (mode) => mode === 'due' || mode === 'part'
+const validContact = (name, phone) => !!String(name || '').trim() && /^\d{10}$/.test(String(phone || '').trim())
 
 export default function AdminDineIn() {
   const [ctx, setCtx] = useState(null)          // null | { type:'DINE_IN', label } | { type:'TAKEAWAY' }
@@ -67,7 +70,10 @@ export default function AdminDineIn() {
   const [partAmt, setPartAmt] = useState('')      // amount received when mode = part
   const [recentTab, setRecentTab] = useState('unbilled')  // unbilled | DINE_IN | TAKEAWAY | DELIVERY
   const [payEditId, setPayEditId] = useState(null)        // recent order whose payment editor is open
+  const [payEditMode, setPayEditMode] = useState(null)    // null | 'part' | 'due' (modes needing contact)
   const [payEditAmt, setPayEditAmt] = useState('')
+  const [payEditName, setPayEditName] = useState('')
+  const [payEditPhone, setPayEditPhone] = useState('')
   const [openItem, setOpenItem] = useState({ show: false, name: '', price: '' })
   const [noteOpen, setNoteOpen] = useState({})   // pending item ids with the note field revealed
   const [busy, setBusy] = useState(false)
@@ -173,10 +179,13 @@ export default function AdminDineIn() {
 
   const doSettle = async () => {
     if (!activeOrder) return
+    if (!complimentary && needsContact(payMode) && !validContact(custName, custPhone)) {
+      toast.error('Customer name and 10-digit mobile are required for Due / Part'); return
+    }
     const disc = complimentary ? 0 : Math.min(Number(discount) || 0, committedTotals.subtotal)
     setBusy(true)
     try {
-      const { data } = await dineApi.settle({ orderId: activeOrder.id, mode: payMode, paidAmount: Number(partAmt) || 0, discount: disc, complimentary })
+      const { data } = await dineApi.settle({ orderId: activeOrder.id, mode: payMode, paidAmount: Number(partAmt) || 0, discount: disc, complimentary, customerName: custName, customerPhone: custPhone })
       setInvoiceOrder(data)
       toast.success(data.settled ? `Table ${ctx.label} settled` : `Bill generated — ${MODE_LABEL[payMode]} (unsettled)`)
       setSettleOpen(false); await refetch(); refetchRecent()
@@ -243,6 +252,7 @@ export default function AdminDineIn() {
   const counterCheckout = async (mode) => {
     if (pendingArr.length === 0) { toast.error('Add items first'); return }
     if (isDelivery && (!custName || !custPhone || !custAddress)) { toast.error('Name, phone and address required for delivery'); return }
+    if (needsContact(mode) && !validContact(custName, custPhone)) { toast.error('Customer name and 10-digit mobile are required for Due / Part'); return }
     setBusy(true)
     try {
       const items = pendingItems()
@@ -263,11 +273,14 @@ export default function AdminDineIn() {
   }
 
   // Confirm / modify the payment mode on an already-billed recent order.
-  const applyPayment = async (orderId, mode, paidAmount) => {
+  const applyPayment = async (orderId, mode, paidAmount, customerName, customerPhone) => {
+    if (needsContact(mode) && !validContact(customerName, customerPhone)) {
+      toast.error('Customer name and 10-digit mobile are required for Due / Part'); return
+    }
     setBusy(true)
     try {
-      await dineApi.setPayment({ orderId, mode, paidAmount: Number(paidAmount) || 0 })
-      setPayEditId(null); setPayEditAmt('')
+      await dineApi.setPayment({ orderId, mode, paidAmount: Number(paidAmount) || 0, customerName, customerPhone })
+      setPayEditId(null); setPayEditMode(null); setPayEditAmt(''); setPayEditName(''); setPayEditPhone('')
       toast.success(mode === 'due' ? 'Marked due' : mode === 'part' ? 'Partial payment saved' : `Settled — ${MODE_LABEL[mode]}`)
       await refetchRecent(); refetch()
     } catch (e) { toast.error('Failed to update payment') } finally { setBusy(false) }
@@ -389,7 +402,7 @@ export default function AdminDineIn() {
                       {billed && (
                         <div className="flex items-center gap-1">
                           <button onClick={() => viewInvoice(o.id)} title="View / print invoice" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Receipt size={13} /></button>
-                          <button onClick={() => { setPayEditId(editing ? null : o.id); setPayEditAmt('') }} title="Payment mode"
+                          <button onClick={() => { const opening = !editing; setPayEditId(opening ? o.id : null); setPayEditMode(null); setPayEditAmt(''); setPayEditName(o.customerName || ''); setPayEditPhone(o.customerPhone || '') }} title="Payment mode"
                             className={`px-2 h-7 flex items-center justify-center rounded-md border text-xs ${editing ? 'border-brand-500 bg-brand-50 text-brand-600' : unsettled ? 'border-red-300 text-red-600' : 'border-stone-200 text-stone-500'} hover:bg-stone-50`}>₹ Payment</button>
                         </div>
                       )}
@@ -400,14 +413,25 @@ export default function AdminDineIn() {
                       <div className="mt-2 pt-2 border-t border-stone-100 space-y-2">
                         <div className="grid grid-cols-3 gap-1.5">
                           {PAY_MODES.map(([mk, ml]) => (
-                            <button key={mk} disabled={busy} onClick={() => { if (mk === 'part') { setPayMode('part'); setPayEditAmt('') } else applyPayment(o.id, mk, 0) }}
-                              className={`py-1.5 rounded-lg border text-xs ${mk === 'part' && payMode === 'part' ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-stone-200 text-stone-600 hover:bg-stone-50'}`}>{ml}</button>
+                            <button key={mk} disabled={busy}
+                              onClick={() => { if (needsContact(mk)) { setPayEditMode(mk); setPayEditAmt(''); setPayEditName(o.customerName || ''); setPayEditPhone(o.customerPhone || '') } else applyPayment(o.id, mk, 0) }}
+                              className={`py-1.5 rounded-lg border text-xs ${payEditMode === mk ? 'border-brand-500 bg-brand-50 text-brand-600' : 'border-stone-200 text-stone-600 hover:bg-stone-50'}`}>{ml}</button>
                           ))}
                         </div>
-                        <div className="flex items-center gap-2">
-                          <input type="number" min="0" value={payEditAmt} onChange={e => setPayEditAmt(e.target.value)} placeholder={`Part amount (of ₹${parseFloat(o.total).toFixed(0)})`} className="flex-1 text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
-                          <button disabled={busy || !payEditAmt} onClick={() => applyPayment(o.id, 'part', payEditAmt)} className="btn-primary py-1.5 px-3 rounded-lg text-xs">Save part</button>
-                        </div>
+                        {needsContact(payEditMode) && (
+                          <div className="space-y-2">
+                            <div className="text-[11px] text-stone-500">Customer details required for {MODE_LABEL[payEditMode]}</div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <input value={payEditName} onChange={e => setPayEditName(e.target.value)} placeholder="Customer name *" className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                              <input value={payEditPhone} onChange={e => setPayEditPhone(e.target.value)} placeholder="Mobile (10 digits) *" maxLength={10} className="text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                            </div>
+                            {payEditMode === 'part' && (
+                              <input type="number" min="0" value={payEditAmt} onChange={e => setPayEditAmt(e.target.value)} placeholder={`Amount received (of ₹${parseFloat(o.total).toFixed(0)})`} className="w-full text-xs bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                            )}
+                            <button disabled={busy || (payEditMode === 'part' && !payEditAmt)} onClick={() => applyPayment(o.id, payEditMode, payEditAmt, payEditName, payEditPhone)}
+                              className="btn-primary w-full justify-center py-1.5 rounded-lg text-xs">{payEditMode === 'due' ? `Mark Due — ₹${parseFloat(o.total).toFixed(0)}` : 'Save partial payment'}</button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -472,6 +496,15 @@ export default function AdminDineIn() {
                             </div>
                           )}
                           {payMode === 'due' && <div className="text-[11px] text-red-600 mt-2">Bill will be generated and left UNSETTLED (₹{grand.toFixed(0)} due).</div>}
+                          {needsContact(payMode) && (
+                            <div className="mt-2">
+                              <div className="text-[11px] text-stone-500 mb-1">Customer details required for {MODE_LABEL[payMode]}</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <input value={custName} onChange={e => setCustName(e.target.value)} placeholder="Customer name *" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                                <input value={custPhone} onChange={e => setCustPhone(e.target.value)} placeholder="Mobile (10 digits) *" maxLength={10} className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </>
                     )}
@@ -569,6 +602,9 @@ export default function AdminDineIn() {
                               <label className="text-xs text-stone-400">Amount received now (₹)</label>
                               <input type="number" min="0" value={partAmt} onChange={e => setPartAmt(e.target.value)} placeholder="0" className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2" />
                             </div>
+                          )}
+                          {needsContact(payMode) && !validContact(custName, custPhone) && (
+                            <div className="text-[11px] text-red-600">Enter customer name & 10-digit mobile above — required for {MODE_LABEL[payMode]}.</div>
                           )}
                           <button disabled={busy} onClick={() => counterCheckout(payMode)} className="btn-primary w-full justify-center py-3 rounded-xl">
                             {payMode === 'due' ? `Generate bill — Due ₹${pendingTotals.total.toFixed(0)}`

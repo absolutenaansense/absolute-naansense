@@ -436,7 +436,7 @@ export const reportsApi = {
     const since = new Date(Date.now() - 120 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('Order')
-      .select('id, billNo, outlet, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, deleted, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
+      .select('id, billNo, outlet, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentMode, settled, paidAmount, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, deleted, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
       .neq('deleted', true)
       .gte('createdAt', since)
       .order('createdAt', { ascending: false })
@@ -744,7 +744,7 @@ export const dineApi = {
   // "settle" action). Recomputes the total authoritatively (discount before 5% GST).
   // A bill is only 'settled' for cash/upi/card/online (or full 'part'); 'due' and
   // partial 'part' generate the bill but leave it UNSETTLED with an outstanding amount.
-  settle: async ({ orderId, mode = 'cash', paidAmount = 0, discount = 0, complimentary = false }) => {
+  settle: async ({ orderId, mode = 'cash', paidAmount = 0, discount = 0, complimentary = false, customerName, customerPhone }) => {
     const { data: items } = await supabase.from('OrderItem').select('quantity, price').eq('orderId', orderId)
     const subtotal = (items || []).reduce((s, i) => s + parseFloat(i.price) * i.quantity, 0)
     const disc = complimentary ? subtotal : Math.min(Math.max(0, discount), subtotal)
@@ -752,11 +752,14 @@ export const dineApi = {
     const grand = complimentary ? 0 : Math.round(taxable * 1.05)
     const billNo = await dineApi.ensureBillNo(orderId)
     const pf = paymentFields(mode, grand, paidAmount, complimentary)
+    const cust = {}
+    if (customerName !== undefined) cust.customerName = customerName || null
+    if (customerPhone !== undefined) cust.customerPhone = customerPhone || null
     const { data, error } = await supabase
       .from('Order')
       .update({
         total: grand, discount: disc, isComplimentary: complimentary,
-        billPrinted: true, billNo, updatedAt: new Date().toISOString(), ...pf,
+        billPrinted: true, billNo, updatedAt: new Date().toISOString(), ...pf, ...cust,
       })
       .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
@@ -766,14 +769,17 @@ export const dineApi = {
 
   // Change / confirm the payment mode on an already-billed order (the "payment mode
   // modification" action in Recent orders). Settles or un-settles accordingly.
-  setPayment: async ({ orderId, mode, paidAmount = 0 }) => {
+  setPayment: async ({ orderId, mode, paidAmount = 0, customerName, customerPhone }) => {
     const { data: ord } = await supabase.from('Order').select('total, isComplimentary').eq('id', orderId).single()
     const grand = parseFloat(ord?.total) || 0
     const billNo = await dineApi.ensureBillNo(orderId)
     const pf = paymentFields(mode, grand, paidAmount, false)
+    const cust = {}
+    if (customerName !== undefined) cust.customerName = customerName || null
+    if (customerPhone !== undefined) cust.customerPhone = customerPhone || null
     const { data, error } = await supabase
       .from('Order')
-      .update({ billPrinted: true, billNo, updatedAt: new Date().toISOString(), ...pf })
+      .update({ billPrinted: true, billNo, updatedAt: new Date().toISOString(), ...pf, ...cust })
       .eq('id', orderId).select(POS_SELECT).single()
     if (error) throw { response: { data: { error: error.message } } }
     await logOp(orderId, 'payment_mode', { mode: pf.paymentMode, paid: pf.paidAmount, settled: pf.settled })
