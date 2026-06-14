@@ -36,10 +36,13 @@ export default function AdminLayout({ children, title }) {
       {/* Sidebar — persistent on desktop, slide-in drawer on mobile */}
       <aside className={`w-60 max-w-[80vw] bg-white border-r border-stone-100 flex flex-col fixed h-full z-50 transition-transform duration-200 md:translate-x-0 ${navOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="p-5 border-b border-stone-100 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-stone-900">Absolute</div>
-            <div className="text-sm font-semibold text-brand-500">Naansense</div>
-            <div className="text-xs text-stone-400 mt-0.5">Admin panel</div>
+          <div className="flex items-center gap-2.5">
+            <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Absolute Naansense" className="h-10 w-10 rounded-full object-cover ring-1 ring-stone-200" />
+            <div>
+              <div className="text-sm font-semibold text-stone-900">Absolute</div>
+              <div className="text-sm font-semibold text-brand-500">Naansense</div>
+              <div className="text-xs text-stone-400 mt-0.5">Admin panel</div>
+            </div>
           </div>
           <button onClick={() => setNavOpen(false)} className="md:hidden p-1.5 text-stone-400"><X size={20} /></button>
         </div>

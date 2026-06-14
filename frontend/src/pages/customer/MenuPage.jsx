@@ -90,7 +90,10 @@ export default function MenuPage() {
     <CustomerLayout>
       {/* Hero */}
       <div className="bg-brand-500 px-4 pt-5 pb-16">
-        <div className="text-white/70 text-xs font-medium mb-1 uppercase tracking-wider">Renukoot</div>
+        <div className="flex items-center gap-3 mb-3">
+          <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Absolute Naansense" className="h-14 w-14 rounded-full object-cover ring-2 ring-white/60 shadow-sm" />
+          <div className="text-white/70 text-xs font-medium uppercase tracking-wider">Renukoot</div>
+        </div>
         <h2 className="text-white text-xl font-semibold">{greeting}, {firstName} 👋</h2>
         <p className="text-white/70 text-sm mt-1">
           {user?.isReturning ? 'Welcome back! Your favourites are waiting.' : 'What would you like today?'}

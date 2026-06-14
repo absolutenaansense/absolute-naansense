@@ -12,7 +12,8 @@ export default function LegalLayout({ title, updated, children }) {
           <button onClick={() => navigate(-1)} className="btn-ghost -ml-2 p-2">
             <ChevronLeft size={20} />
           </button>
-          <Link to="/" className="flex items-center gap-1">
+          <Link to="/" className="flex items-center gap-2">
+            <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Absolute Naansense" className="h-8 w-8 rounded-full object-cover ring-1 ring-stone-200" />
             <span className="font-semibold text-stone-900">Absolute</span>
             <span className="font-semibold text-brand-500">Naansense</span>
           </Link>

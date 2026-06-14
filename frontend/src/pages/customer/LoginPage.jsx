@@ -31,7 +31,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         {/* Brand */}
         <div className="text-center mb-8">
-          <div className="text-3xl mb-2">🍽️</div>
+          <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Absolute Naansense" className="h-24 w-24 rounded-full object-cover mx-auto mb-3 ring-1 ring-stone-200 shadow-sm" />
           <h1 className="text-2xl font-semibold text-stone-900">
             Absolute <span className="text-brand-500">Naansense</span>
           </h1>

@@ -29,7 +29,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen bg-stone-900 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="text-3xl mb-3">🏪</div>
+          <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Absolute Naansense" className="h-20 w-20 rounded-full object-cover mx-auto mb-3 ring-2 ring-stone-700" />
           <h1 className="text-xl font-semibold text-white">Admin panel</h1>
           <p className="text-stone-400 text-sm mt-1">Absolute Naansense</p>
         </div>

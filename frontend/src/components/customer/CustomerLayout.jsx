@@ -19,20 +19,22 @@ export default function CustomerLayout({ children, showBack = false, title }) {
       {/* Top bar */}
       <header className="bg-white border-b border-stone-100 sticky top-0 z-40 safe-top">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {showBack && (
               <button onClick={() => navigate(-1)} className="btn-ghost -ml-2 p-2">
                 <ChevronLeft size={20} />
               </button>
             )}
-            {title ? (
-              <span className="font-semibold text-stone-800">{title}</span>
-            ) : (
-              <Link to="/" className="flex items-center gap-1">
-                <span className="font-semibold text-stone-900">Absolute</span>
-                <span className="font-semibold text-brand-500">Naansense</span>
-              </Link>
-            )}
+            <Link to="/" className="flex items-center gap-2">
+              <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Absolute Naansense" className="h-9 w-9 rounded-full object-cover ring-1 ring-stone-200" />
+              {!title && (
+                <span className="flex items-center gap-1">
+                  <span className="font-semibold text-stone-900">Absolute</span>
+                  <span className="font-semibold text-brand-500">Naansense</span>
+                </span>
+              )}
+            </Link>
+            {title && <span className="font-semibold text-stone-800">{title}</span>}
           </div>
 
           <div className="flex items-center gap-1">
