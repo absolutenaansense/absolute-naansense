@@ -169,7 +169,8 @@ export const ordersApi = {
     return { data }
   },
 
-  createOrder: async ({ userId, items, paymentMethod, total, orderType, deliveryAddress, customerName, pickupAt, notes }) => {
+  createOrder: async ({ userId, items, paymentMethod, total, orderType, deliveryAddress, customerName, pickupAt, notes, outlet }) => {
+    const out = outlet || 'renukoot'
     // COD orders need no payment step, so they go straight to the admin
     // "Awaiting confirm" queue (payment_received). UPI orders wait at
     // 'pending' until the customer marks payment as made.
@@ -177,6 +178,7 @@ export const ordersApi = {
       .from('Order')
       .insert([{
         userId, paymentMethod, total,
+        outlet: out,
         orderType: orderType || 'DELIVERY',
         deliveryAddress: deliveryAddress || null,
         customerName: customerName || null,
@@ -189,8 +191,8 @@ export const ordersApi = {
       .single()
     if (orderError) throw { response: { data: { error: orderError.message } } }
 
-    // Assign a daily KOT number at placement so the auto-printed KOT is numbered.
-    const { data: kotNo } = await supabase.rpc('next_kot_no')
+    // Assign a per-outlet daily KOT number so the auto-printed KOT is numbered.
+    const { data: kotNo } = await supabase.rpc('next_kot_no', { p_outlet: out })
     const orderItems = items.map(item => ({
       orderId: order.id,
       menuItemId: item.menuItemId ?? null,
@@ -236,10 +238,10 @@ export const ordersApi = {
   },
 
   confirmOrder: async (id) => {
-    // Assign a sequential (per-financial-year) bill number if not already set.
-    const { data: cur } = await supabase.from('Order').select('billNo').eq('id', id).single()
+    // Assign a sequential (per-outlet, per-financial-year) bill number if not set.
+    const { data: cur } = await supabase.from('Order').select('billNo, outlet').eq('id', id).single()
     let billNo = cur?.billNo
-    if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no'); billNo = bn }
+    if (!billNo) { const { data: bn } = await supabase.rpc('next_bill_no', { p_outlet: cur?.outlet || 'renukoot' }); billNo = bn }
     const { data, error } = await supabase
       .from('Order')
       .update({ status: 'confirmed', paymentStatus: 'paid', billNo, confirmedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })

@@ -211,6 +211,7 @@ export default function CheckoutPage() {
         paymentMethod: pm,
         total,
         orderType,
+        outlet,
         deliveryAddress: addressText,
         pickupAt,
         notes: buildCustomerNotes({ text: orderNote, outlet }),
