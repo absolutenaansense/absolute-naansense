@@ -560,6 +560,15 @@ const itemRows = (orderId, items, kotNo) => items.map(i => ({
 }))
 const nextKotNo = async (outlet) => { const { data } = await supabase.rpc('next_kot_no', { p_outlet: outlet || 'renukoot' }); return data }
 
+// Start of "today" (IST) expressed as a naive-UTC timestamp string for DB filters.
+// (createdAt is stored in UTC; the Supabase session timezone is UTC.)
+const istDayStartUtc = () => {
+  const ist = new Date(Date.now() + 5.5 * 3600 * 1000)
+  const startMs = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - 5.5 * 3600 * 1000
+  const s = new Date(startMs), p = (n) => String(n).padStart(2, '0')
+  return `${s.getUTCFullYear()}-${p(s.getUTCMonth() + 1)}-${p(s.getUTCDate())} ${p(s.getUTCHours())}:${p(s.getUTCMinutes())}:${p(s.getUTCSeconds())}`
+}
+
 // Resolve the Order fields for a chosen payment mode against a grand total.
 // cash/upi/card/online -> settled in full; part -> partial (settled iff paid >= grand);
 // due -> nothing received yet (stays unsettled). Complimentary is a full waive-off.
@@ -619,13 +628,14 @@ export const dineApi = {
     return { data: data || [] }
   },
 
-  // Recent POS orders for the side panel (one outlet).
+  // Recent POS orders for the side panel (one outlet) — today (IST) only.
   recent: async (outlet) => {
     let q = supabase
       .from('Order')
       .select('id, orderType, tableLabel, customerName, customerPhone, total, status, paymentStatus, paymentMethod, paymentMode, settled, paidAmount, billNo, billPrinted, createdAt, items:OrderItem(quantity)')
+      .gte('createdAt', istDayStartUtc())
       .order('createdAt', { ascending: false })
-      .limit(60)
+      .limit(200)
     if (outlet) q = q.eq('outlet', outlet)
     const { data, error } = await q
     if (error) throw { response: { data: { error: error.message } } }
