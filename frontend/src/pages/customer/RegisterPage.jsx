@@ -20,6 +20,10 @@ export default function RegisterPage() {
       toast.error('Passwords do not match')
       return
     }
+    if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      toast.error('A valid email is required — it is used to recover your password')
+      return
+    }
     if (!agreed) {
       toast.error('Please accept the Terms & Conditions and Privacy Policy to continue')
       return
@@ -29,7 +33,7 @@ export default function RegisterPage() {
       const { data } = await authApi.register({
         name: form.name,
         phone: form.phone,
-        email: form.email || undefined,
+        email: form.email.trim(),
         password: form.password,
       })
       setUser(data.user, data.token)
@@ -87,11 +91,12 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="label">Email <span className="text-stone-400 font-normal">(optional)</span></label>
+              <label className="label">Email</label>
               <div className="relative">
                 <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
-                <input className="input pl-9" type="email" placeholder="priya@email.com" {...field('email')} />
+                <input className="input pl-9" type="email" placeholder="priya@email.com" required {...field('email')} />
               </div>
+              <p className="text-[11px] text-stone-400 mt-1">Used to recover your password if you forget it.</p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

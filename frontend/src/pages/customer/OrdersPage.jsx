@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import { ordersApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
+import { useCartStore } from '../../store/cartStore'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { formatIST } from '../../utils/dateIST'
 import { etaInfo } from '../../utils/eta'
-import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, Timer, Receipt } from 'lucide-react'
+import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, Timer, Receipt, RotateCcw, ListTree } from 'lucide-react'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import PayAheadQR from '../../components/customer/PayAheadQR'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
-import { parseOrderNotes } from '../../utils/orderNotes'
+import { parseOrderNotes, getOrderMeta } from '../../utils/orderNotes'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 
@@ -26,7 +29,24 @@ function OrderCard({ order }) {
   const [liveStatus, setLiveStatus] = useState(order.status)
   const [liveNotes, setLiveNotes] = useState(order.notes)
   const [expanded, setExpanded] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const [invoiceOpen, setInvoiceOpen] = useState(false)
+  const navigate = useNavigate()
+
+  // Re-order: drop this order's items back into the cart for the same outlet.
+  const reorder = () => {
+    const cart = useCartStore.getState()
+    cart.setOutlet(order.outlet || 'renukoot')   // empties cart if a different outlet
+    ;(order.items || []).forEach(it => {
+      const item = {
+        id: it.menuItemId || `ext-${(it.menuItem?.name || it.itemName || 'item')}`,
+        name: it.menuItem?.name || it.itemName, price: parseFloat(it.price), external: !it.menuItemId,
+      }
+      for (let i = 0; i < it.quantity; i++) cart.addItem(item)
+    })
+    toast.success('Items added to cart')
+    navigate('/menu')
+  }
 
   // Subscribe to real-time status updates for this order
   useEffect(() => {
@@ -51,6 +71,11 @@ function OrderCard({ order }) {
   const Icon = cfg.icon
   const isActive = !['delivered', 'cancelled'].includes(liveStatus)
   const eta = (isActive && !['pending', 'payment_received'].includes(liveStatus)) ? etaInfo(order.confirmedAt, now) : null
+
+  const meta = getOrderMeta(order)
+  const subtotal = (order.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
+  const gst = Math.round(subtotal * 0.05)
+  const delivery = Math.max(0, Math.round(parseFloat(order.total) - subtotal - gst))
 
   return (
     <div className="card mb-3 overflow-hidden">
@@ -84,8 +109,11 @@ function OrderCard({ order }) {
           <span className="text-xs text-stone-500">{order.orderType === 'TAKEAWAY' ? 'Takeaway · Cash' : order.paymentMethod === 'QR_UPI' ? 'UPI · Prepaid' : 'Cash on delivery'}</span>
           <div className="flex items-center gap-3">
             <span className="font-semibold text-stone-900">₹{parseFloat(order.total).toFixed(0)}</span>
+            <button onClick={() => setDetailsOpen(d => !d)} className="text-stone-500 text-xs flex items-center gap-0.5 hover:text-stone-800">
+              <ListTree size={13} /> Details {detailsOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+            </button>
             <button onClick={() => setInvoiceOpen(true)} className="text-stone-500 text-xs flex items-center gap-0.5 hover:text-stone-800">
-              <Receipt size={13} /> Tax invoice
+              <Receipt size={13} /> Invoice
             </button>
             {isActive && (
               <button onClick={() => setExpanded(e => !e)} className="text-brand-500 text-xs flex items-center gap-0.5">
@@ -95,6 +123,32 @@ function OrderCard({ order }) {
           </div>
         </div>
       </div>
+
+      {/* Full order details */}
+      {detailsOpen && (
+        <div className="border-t border-stone-100 p-4 space-y-3 bg-stone-50/50">
+          <div>
+            <div className="text-xs font-semibold text-stone-400 uppercase mb-1.5">Items</div>
+            <div className="space-y-1">
+              {(order.items || []).map(it => (
+                <div key={it.id} className="flex justify-between text-sm">
+                  <span className="text-stone-700">{it.menuItem?.name || it.itemName} × {it.quantity}</span>
+                  <span className="text-stone-600">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-stone-100 mt-2 pt-2 space-y-0.5 text-xs text-stone-500">
+              <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
+              {delivery > 0 && <div className="flex justify-between"><span>Delivery</span><span>₹{delivery}</span></div>}
+              <div className="flex justify-between"><span>GST (5%)</span><span>₹{gst}</span></div>
+              <div className="flex justify-between text-sm font-semibold text-stone-900 pt-0.5"><span>Total</span><span>₹{parseFloat(order.total).toFixed(0)}</span></div>
+            </div>
+          </div>
+          {meta.address && <div className="text-xs text-stone-500"><span className="text-stone-400">Deliver to: </span>{meta.address}</div>}
+          {meta.note && <div className="text-xs text-amber-600"><span className="text-amber-500">Note: </span>{meta.note}</div>}
+          <button onClick={reorder} className="btn-primary w-full justify-center py-2.5 rounded-xl text-sm"><RotateCcw size={14} /> Re-order these items</button>
+        </div>
+      )}
       {expanded && isActive && (
         <div className="border-t border-stone-100 p-4 bg-stone-50/50 space-y-3">
           <LiveOrderTracker orderId={order.id} />
