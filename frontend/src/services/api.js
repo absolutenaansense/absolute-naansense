@@ -283,6 +283,7 @@ export const ordersApi = {
     const { data, error } = await supabase
       .from('Order')
       .select('*, items:OrderItem(*, menuItem:MenuItem(name, category:Category(name))), user:User(name, phone)')
+      .neq('deleted', true)
       .order('createdAt', { ascending: false })
     if (error) throw { response: { data: { error: error.message } } }
     return { data }
@@ -323,6 +324,17 @@ export const ordersApi = {
     if (error) throw { response: { data: { error: error.message } } }
     await logOp(id, 'order_cancel', { remark: remark || null })
     return { data }
+  },
+
+  // Super-admin delete: hide the order from reports (kept in DB, logged for audit).
+  deleteOrder: async (id) => {
+    const { error } = await supabase
+      .from('Order')
+      .update({ deleted: true, updatedAt: new Date().toISOString() })
+      .eq('id', id)
+    if (error) throw { response: { data: { error: error.message } } }
+    await logOp(id, 'bill_delete', { deleted: true })
+    return { data: { success: true } }
   },
 
   updateStatus: async (id, status) => {
@@ -423,7 +435,8 @@ export const reportsApi = {
     const since = new Date(Date.now() - 120 * 86400000).toISOString()
     const { data, error } = await supabase
       .from('Order')
-      .select('id, billNo, outlet, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
+      .select('id, billNo, outlet, orderType, tableLabel, customerName, customerPhone, deliveryAddress, paymentMethod, paymentStatus, status, total, discount, isComplimentary, payments, confirmedAt, createdAt, notes, deleted, user:User(name, phone), items:OrderItem(id, quantity, price, itemName, specialRequest, menuItem:MenuItem(name))')
+      .neq('deleted', true)
       .gte('createdAt', since)
       .order('createdAt', { ascending: false })
     if (error) throw { response: { data: { error: error.message } } }

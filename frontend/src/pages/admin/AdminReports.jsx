@@ -33,6 +33,7 @@ export default function AdminReports() {
   const [outletFilter, setOutletFilter] = useState(staff?.outlet || 'all')
   const activeOutlet = staff?.outlet || outletFilter
   const isBiller = staff?.kind === 'biller'   // billers get a read-only report (no modify/delete)
+  const isSuper = staff?.isSuper              // only super admin can delete (hide) an order
 
   const [viewOrder, setViewOrder] = useState(null)
   const [editOrder, setEditOrder] = useState(null)
@@ -66,6 +67,11 @@ export default function AdminReports() {
     const remark = prompt('Cancellation remark (optional):', '') ?? ''
     try { await ordersApi.cancelOrder(r.id, remark); toast.success('Tax invoice cancelled'); await refetch() }
     catch { toast.error('Failed to cancel') }
+  }
+  const deleteBill = async (r) => {
+    if (!confirm(`Delete this order permanently from reports? This cannot be undone from here.`)) return
+    try { await ordersApi.deleteOrder(r.id); toast.success('Order deleted'); await refetch() }
+    catch { toast.error('Failed to delete') }
   }
 
   const { data: orders = [], isLoading, refetch } = useQuery({
@@ -214,6 +220,7 @@ export default function AdminReports() {
                       <button onClick={() => printBill(r)} title="Print" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Printer size={14} /></button>
                       {!isCancelled && <button onClick={() => startEdit(r)} title="Modify" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>}
                       {!isBiller && !isCancelled && <button onClick={() => cancelBill(r)} title="Cancel" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>}
+                      {isSuper && isCancelled && <button onClick={() => deleteBill(r)} title="Delete from reports" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-300 bg-red-50 text-red-600 hover:bg-red-100"><Trash2 size={14} /></button>}
                     </div>
                   </td>
                 </tr>
