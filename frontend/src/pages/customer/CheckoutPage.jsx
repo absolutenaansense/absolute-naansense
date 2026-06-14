@@ -16,7 +16,13 @@ import { RESTAURANT } from '../../config/restaurant'
 const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
 const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
 const GST_RATE = 0.05 // 5% GST applied to every order's subtotal
-const UPI_ENABLED = false // UPI disabled in online ordering — COD only
+
+// Ordering hours (IST, minutes from midnight):
+//   06:00 (360)  — start taking orders
+//   10:00 (600)  — kitchen starts cooking; orders before this are queued for 10:00 AM
+//   22:59 (1379) — last minute online (UPI) payment is offered
+//   23:05 (1385) — last minute an order can be placed; after this the kitchen is closed
+const OPEN_MIN = 360, COOK_MIN = 600, UPI_LAST_MIN = 1379, CLOSE_MIN = 1385
 
 const steps = ['Delivery', 'Payment', 'Confirm']
 
@@ -131,17 +137,34 @@ export default function CheckoutPage() {
     return true
   }
 
-  // Online ordering is open 10:00 AM – 11:15 PM IST (delivery + takeaway).
+  // Ordering window + payment availability (recomputed live so it stays accurate
+  // across the 10:59 PM / 11:05 PM boundaries).
   const currentIstMinutes = () => {
     const [h, m] = formatIST(new Date().toISOString(), 'HH:mm').split(':').map(Number)
     return h * 60 + m
   }
-  const isWithinHours = () => { const m = currentIstMinutes(); return m >= 600 && m <= 1395 }
-  const orderingOpen = isWithinHours()
+  const orderingStatus = () => {
+    const m = currentIstMinutes()
+    const open = m >= OPEN_MIN && m <= CLOSE_MIN
+    return { open, early: open && m < COOK_MIN, onlinePayment: open && m <= UPI_LAST_MIN }
+  }
+  const status = orderingStatus()
+  const orderingOpen = status.open       // can an order be placed right now?
+  const orderingEarly = status.early     // before 10 AM → order is queued for 10 AM
+  const upiAvailable = status.onlinePayment  // online (UPI) payment offered?
   const hoursValid = () => {
-    if (!isWithinHours()) { toast.error('Orders can be placed only between 10:00 AM and 11:15 PM.'); return false }
+    if (!orderingStatus().open) { toast.error("Kitchen is closed. Orders can't be placed."); return false }
     return true
   }
+  const orderingBanner = !orderingOpen ? (
+    <div className="mb-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-3 py-2.5 text-center font-medium">
+      Kitchen is closed. Orders can't be placed.
+    </div>
+  ) : orderingEarly ? (
+    <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl px-3 py-2.5 text-center">
+      We open at 10:00 AM — your order will be placed at 10:00 AM. You can pay now by UPI or choose Cash on delivery.
+    </div>
+  ) : null
 
   const goToPayment = () => {
     if (!requireLogin()) return
@@ -167,6 +190,13 @@ export default function CheckoutPage() {
       return
     }
     if (!pickupValid()) return
+    // Online payment closes at 10:59 PM — fall back to Cash on delivery after that.
+    let pm = paymentMethod
+    if (pm === 'QR_UPI' && !orderingStatus().onlinePayment) {
+      pm = 'CASH_ON_DELIVERY'
+      setPaymentMethod('CASH_ON_DELIVERY')
+      toast('Online payment has closed for tonight — placing as Cash on delivery')
+    }
     setConfirming(true)
     try {
       const orderItems = getOrderItems()
@@ -178,7 +208,7 @@ export default function CheckoutPage() {
       const { data } = await ordersApi.createOrder({
         userId: user.id,
         items: orderItems,
-        paymentMethod,
+        paymentMethod: pm,
         total,
         orderType,
         deliveryAddress: addressText,
@@ -472,11 +502,7 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {!orderingOpen && (
-            <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl px-3 py-2.5 text-center">
-              We're currently closed. Orders can be placed between 10:00 AM and 11:15 PM.
-            </div>
-          )}
+          {orderingBanner}
           <button onClick={goToPayment} disabled={!orderingOpen} className="btn-primary w-full justify-center py-3.5 rounded-2xl">
             Continue to payment <ChevronRight size={16} />
           </button>
@@ -490,7 +516,7 @@ export default function CheckoutPage() {
             <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Payment method</div>
 
             <div className="space-y-3">
-              {UPI_ENABLED && (
+              {upiAvailable && (
                 <button
                   onClick={() => setPaymentMethod('QR_UPI')}
                   className={`w-full text-left p-4 rounded-xl border-2 transition-all ${
@@ -528,6 +554,9 @@ export default function CheckoutPage() {
                 </div>
               </button>
             </div>
+            {orderingOpen && !upiAvailable && (
+              <p className="text-xs text-stone-400 mt-3 text-center">Online payment is unavailable after 10:59 PM — Cash on delivery only.</p>
+            )}
           </div>
 
           {paymentMethod === 'QR_UPI' && (
@@ -564,6 +593,15 @@ export default function CheckoutPage() {
                   <span className="text-sm font-semibold text-stone-700">Paytm</span>
                 </a>
 
+                {/* CRED */}
+                <a
+                  href={`credpay://upi/pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
+                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-stone-300 rounded-2xl p-3.5 transition-all active:scale-95"
+                >
+                  <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#0B0B0B"/><text x="9" y="31" fontSize="15" fontWeight="bold" fill="white">CRED</text></svg>
+                  <span className="text-sm font-semibold text-stone-700">CRED</span>
+                </a>
+
                 {/* BHIM / Any UPI */}
                 <a
                   href={`upi://pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
@@ -594,11 +632,7 @@ export default function CheckoutPage() {
             </div>
           )}
 
-          {!orderingOpen && (
-            <div className="mb-3 bg-amber-50 border border-amber-200 text-amber-700 text-sm rounded-xl px-3 py-2.5 text-center">
-              We're currently closed. Orders can be placed between 10:00 AM and 11:15 PM.
-            </div>
-          )}
+          {orderingBanner}
           <button
             onClick={openConfirm}
             disabled={confirming || !orderingOpen}
@@ -708,14 +742,15 @@ export default function CheckoutPage() {
                   {/* UPI app buttons */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
                     {[
-                      { name: 'Google Pay', scheme: 'gpay', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-                      { name: 'PhonePe', scheme: 'phonepe', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-                      { name: 'Paytm', scheme: 'paytmmp', bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
-                      { name: 'BHIM / UPI', scheme: 'upi', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
+                      { name: 'Google Pay', scheme: 'gpay', path: 'pay', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
+                      { name: 'PhonePe', scheme: 'phonepe', path: 'pay', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
+                      { name: 'Paytm', scheme: 'paytmmp', path: 'pay', bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
+                      { name: 'CRED', scheme: 'credpay', path: 'upi/pay', bg: 'bg-stone-100', text: 'text-stone-800', border: 'border-stone-300' },
+                      { name: 'BHIM / UPI', scheme: 'upi', path: 'pay', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
                     ].map(app => (
                       <a
                         key={app.scheme}
-                        href={`${app.scheme}://pay?pa=8299018895@okbizaxis&am=${paidTotal.toFixed(2)}&cu=INR`}
+                        href={`${app.scheme}://${app.path}?pa=8299018895@okbizaxis&am=${paidTotal.toFixed(2)}&cu=INR`}
                         onClick={() => setPaymentState('attempted')}
                         className={`flex items-center justify-center gap-1.5 text-xs font-semibold ${app.bg} ${app.text} border ${app.border} rounded-xl py-3 transition-all active:scale-95`}
                       >{app.name}</a>

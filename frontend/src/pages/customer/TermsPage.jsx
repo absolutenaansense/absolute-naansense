@@ -31,10 +31,11 @@ export default function TermsPage() {
 
       <Section heading="3. Ordering & service hours">
         <p>
-          Delivery and takeaway orders can be placed only between <strong>10:00 AM and 11:15 PM IST</strong>.
-          All orders are subject to acceptance and availability. We may refuse or cancel an order at
-          our discretion, including where items are unavailable or where we are unable to serve your
-          location.
+          Delivery and takeaway orders can be placed between <strong>6:00 AM and 11:05 PM IST</strong>.
+          Orders placed before 10:00 AM are prepared from 10:00 AM (kitchen opening). Online (UPI)
+          payment is available until 10:59 PM; after that, orders are Cash on delivery only. All orders
+          are subject to acceptance and availability. We may refuse or cancel an order at our discretion,
+          including where items are unavailable or where we are unable to serve your location.
         </p>
       </Section>
 
