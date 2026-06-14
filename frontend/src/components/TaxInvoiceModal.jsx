@@ -31,10 +31,12 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
   const cgst = gstTotal / 2
   const sgst = gstTotal / 2
   const grand = comp ? 0 : (order.total != null ? parseFloat(order.total) : taxable + gstTotal)
-  // Whatever the grand total has beyond items + GST is the delivery charge
-  // (0 for dine-in/takeaway; the delivery fee for delivery orders).
-  const deliveryCharge = Math.max(0, grand - taxable - gstTotal)
-  const roundOff = grand - (taxable + gstTotal + deliveryCharge)
+  // Whatever the grand total has beyond items + GST is the delivery + convenience
+  // charge. Prefer the stored split (newer orders); else lump it into Delivery.
+  const extra = Math.max(0, grand - taxable - gstTotal)
+  const convenienceCharge = meta.convenienceFee != null ? Math.min(meta.convenienceFee, extra) : 0
+  const deliveryCharge = meta.deliveryFee != null ? extra - convenienceCharge : extra
+  const roundOff = grand - (taxable + gstTotal + deliveryCharge + convenienceCharge)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
 
   const paid = comp ? 'Complimentary'
@@ -121,6 +123,7 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
           <div className="flex justify-between"><span /><span>CGST 2.5%&nbsp;&nbsp;{money(cgst)}</span></div>
           <div className="flex justify-between"><span /><span>SGST 2.5%&nbsp;&nbsp;{money(sgst)}</span></div>
           {deliveryCharge > 0 && <div className="flex justify-between"><span /><span>Delivery Charge&nbsp;&nbsp;{money(deliveryCharge)}</span></div>}
+          {convenienceCharge > 0 && <div className="flex justify-between"><span /><span>Delivery Convenience Fee&nbsp;&nbsp;{money(convenienceCharge)}</span></div>}
           {Math.abs(roundOff) >= 0.01 && <div className="flex justify-between"><span /><span>Round off&nbsp;&nbsp;{roundOff >= 0 ? '+' : ''}{money(roundOff)}</span></div>}
 
           <div className="border-t border-dashed border-stone-300 my-2" />

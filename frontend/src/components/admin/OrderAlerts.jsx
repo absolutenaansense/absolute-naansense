@@ -6,7 +6,7 @@ import { supabase } from '../../services/supabase'
 import { useStaff } from '../../staff/StaffContext'
 import { ordersApi } from '../../services/api'
 import { printTicket } from '../../utils/printKot'
-import { getOrderMeta, itemNote } from '../../utils/orderNotes'
+import { getOrderMeta, itemNote, orderFees } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
 import { playRing, notify, requestNotifyPermission, armAudio, flashTitle, isAway, unlockAudio, audioReady } from '../../utils/notify'
 
@@ -121,9 +121,7 @@ export default function OrderAlerts() {
       {current && (() => {
         const o = current
         const meta = getOrderMeta(o)
-        const subtotal = (o.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
-        const gst = Math.round(subtotal * 0.05)
-        const delivery = Math.max(0, Math.round(parseFloat(o.total) - subtotal - gst))
+        const { subtotal, gst, delivery, convenience } = orderFees(o)
         const where = meta.type === 'TAKEAWAY' ? 'Take Away' : meta.type === 'DINE_IN' ? `Dine-in ${meta.table || ''}` : 'Delivery'
         return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4">
@@ -160,6 +158,7 @@ export default function OrderAlerts() {
             <div className="border-t border-stone-100 mt-2 pt-2 space-y-0.5 text-xs text-stone-500">
               <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
               {delivery > 0 && <div className="flex justify-between"><span>Delivery</span><span>₹{delivery}</span></div>}
+              {convenience > 0 && <div className="flex justify-between"><span>Delivery convenience</span><span>₹{convenience}</span></div>}
               <div className="flex justify-between"><span>GST (5%)</span><span>₹{gst}</span></div>
               <div className="flex justify-between text-sm font-semibold text-stone-900 pt-0.5"><span>Total</span><span>₹{parseFloat(o.total).toFixed(0)}</span></div>
             </div>

@@ -4,7 +4,7 @@ import { Check, X, ChevronDown, ChevronUp, RefreshCw, Printer, Timer, Receipt, M
 import toast from 'react-hot-toast'
 import { formatIST } from '../../utils/dateIST'
 import { etaInfo } from '../../utils/eta'
-import { getOrderMeta, itemNote } from '../../utils/orderNotes'
+import { getOrderMeta, itemNote, orderFees } from '../../utils/orderNotes'
 import { printTicket } from '../../utils/printKot'
 import { sendKotWhatsApp } from '../../utils/whatsappKot'
 import AdminLayout from '../../components/admin/AdminLayout'
@@ -54,9 +54,7 @@ function OrderCard({ order, refetch, now }) {
   const eta = active ? etaInfo(order.confirmedAt, now) : null
 
   const meta = getOrderMeta(order)
-  const subtotal = (order.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
-  const gst = Math.round(subtotal * 0.05)
-  const delivery = Math.max(0, Math.round(parseFloat(order.total) - subtotal - gst))
+  const { subtotal, gst, delivery, convenience } = orderFees(order)
 
   const orderKot = (o) => printTicket({ ...o, kotNo: o.items?.[0]?.kotNo }, { title: 'KOT', showPrices: false })
 
@@ -154,6 +152,7 @@ function OrderCard({ order, refetch, now }) {
             <div className="border-t border-stone-100 mt-2 pt-2 space-y-0.5">
               <div className="flex justify-between text-xs text-stone-500"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
               {delivery > 0 && <div className="flex justify-between text-xs text-stone-500"><span>Delivery</span><span>₹{delivery}</span></div>}
+              {convenience > 0 && <div className="flex justify-between text-xs text-stone-500"><span>Delivery convenience</span><span>₹{convenience}</span></div>}
               <div className="flex justify-between text-xs text-stone-500"><span>GST (5%)</span><span>₹{gst}</span></div>
               <div className="flex justify-between text-sm font-semibold pt-0.5"><span>Total</span><span>₹{parseFloat(order.total).toFixed(0)}</span></div>
             </div>

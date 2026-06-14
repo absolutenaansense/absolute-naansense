@@ -15,9 +15,12 @@ export function buildOrderNotes({ type, address, itemNotes }) {
 
 // Customer order notes: the whole-order special request text + the outlet the
 // order was placed for. Stored as JSON in Order.notes.
-export function buildCustomerNotes({ text, outlet }) {
+export function buildCustomerNotes({ text, outlet, deliveryFee, convenienceFee, deliveryLabel }) {
   const t = (text || '').trim()
-  return JSON.stringify({ text: t || null, outlet: outlet || null })
+  return JSON.stringify({
+    text: t || null, outlet: outlet || null,
+    deliveryFee: deliveryFee ?? null, convenienceFee: convenienceFee ?? null, deliveryLabel: deliveryLabel || null,
+  })
 }
 
 // Normalized order metadata, preferring real columns and falling back to the
@@ -34,6 +37,9 @@ export function getOrderMeta(order) {
     note: n.text || null,   // whole-order special request (plain-text notes)
     cancelRemark: n.cancelRemark || null,   // admin's reason when an order is cancelled
     outlet: n.outlet || null,   // 'renukoot' | 'renusagar'
+    deliveryFee: n.deliveryFee ?? null,
+    convenienceFee: n.convenienceFee ?? null,
+    deliveryLabel: n.deliveryLabel || null,
     itemNotes: n.items || {},
   }
 }
@@ -49,6 +55,21 @@ export function withCancelRemark(notes, remark) {
   return JSON.stringify(obj)
 }
 
+// Reconstruct an order's money breakdown for invoices. Prefers the stored
+// delivery/convenience split (newer orders); older orders fall back to lumping
+// whatever is left after subtotal+GST into the delivery line.
+export function orderFees(order) {
+  const meta = getOrderMeta(order)
+  const subtotal = (order?.items || []).reduce((s, it) => s + parseFloat(it.price) * (it.quantity || 0), 0)
+  const total = parseFloat(order?.total) || 0
+  const gst = Math.round(subtotal * 0.05)
+  const combined = Math.max(0, Math.round(total - subtotal - gst))
+  if (meta.deliveryFee != null || meta.convenienceFee != null) {
+    return { subtotal, gst, delivery: meta.deliveryFee || 0, convenience: meta.convenienceFee || 0, label: meta.deliveryLabel, total }
+  }
+  return { subtotal, gst, delivery: combined, convenience: 0, label: null, total }
+}
+
 // Per-item special request: prefer the OrderItem column, fall back to notes JSON.
 export function itemNote(order, item) {
   return item?.specialRequest || getOrderMeta(order).itemNotes?.[item?.menuItemId] || ''
@@ -59,7 +80,7 @@ export function parseOrderNotes(notes) {
   try {
     const o = JSON.parse(notes)
     if (o && typeof o === 'object') {
-      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {}, text: o.text ?? null, cancelRemark: o.cancelRemark ?? null, outlet: o.outlet ?? null }
+      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {}, text: o.text ?? null, cancelRemark: o.cancelRemark ?? null, outlet: o.outlet ?? null, deliveryFee: o.deliveryFee ?? null, convenienceFee: o.convenienceFee ?? null, deliveryLabel: o.deliveryLabel ?? null }
     }
   } catch {
     // Legacy plain-text note — surface it as a generic order note.

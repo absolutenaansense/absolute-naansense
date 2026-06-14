@@ -41,7 +41,9 @@ export function printTicket(order, opts = {}) {
   const subtotal = items.reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
   const gst = Math.round(subtotal * GST_RATE)
   const total = title === 'BILL' ? parseFloat(order.total) : subtotal + gst
-  const delivery = Math.max(0, Math.round(total - subtotal - gst))
+  const extra = Math.max(0, Math.round(total - subtotal - gst))
+  const convenience = meta.convenienceFee != null ? Math.min(meta.convenienceFee, extra) : 0
+  const delivery = meta.deliveryFee != null ? extra - convenience : extra
 
   const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
   const ref = order.id?.substring(0, 8).toUpperCase()
@@ -100,6 +102,7 @@ export function printTicket(order, opts = {}) {
     ${showPrices ? `
       <div class="row tot"><span>Subtotal</span><span>Rs ${subtotal.toFixed(0)}</span></div>
       ${delivery > 0 ? `<div class="row"><span>Delivery</span><span>Rs ${delivery}</span></div>` : ''}
+      ${convenience > 0 ? `<div class="row"><span>Delivery convenience</span><span>Rs ${convenience}</span></div>` : ''}
       <div class="row"><span>GST (5%)</span><span>Rs ${gst}</span></div>
       <div class="row big"><span>TOTAL</span><span>Rs ${total.toFixed(0)}</span></div>
       <div class="hr"></div>
@@ -162,8 +165,10 @@ export function printBill(order) {
   const cgst = gstTotal / 2
   const sgst = gstTotal / 2
   const grand = comp ? 0 : (order.total != null ? parseFloat(order.total) : taxable + gstTotal)
-  const deliveryCharge = Math.max(0, grand - taxable - gstTotal)
-  const roundOff = grand - (taxable + gstTotal + deliveryCharge)
+  const extraB = Math.max(0, grand - taxable - gstTotal)
+  const convenienceCharge = meta.convenienceFee != null ? Math.min(meta.convenienceFee, extraB) : 0
+  const deliveryCharge = meta.deliveryFee != null ? extraB - convenienceCharge : extraB
+  const roundOff = grand - (taxable + gstTotal + deliveryCharge + convenienceCharge)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
 
   const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
@@ -222,6 +227,7 @@ export function printBill(order) {
     <div class="row"><span></span><span>CGST 2.5%&nbsp;&nbsp;${money(cgst)}</span></div>
     <div class="row"><span></span><span>SGST 2.5%&nbsp;&nbsp;${money(sgst)}</span></div>
     ${deliveryCharge > 0 ? `<div class="row"><span></span><span>Delivery Charge&nbsp;&nbsp;${money(deliveryCharge)}</span></div>` : ''}
+    ${convenienceCharge > 0 ? `<div class="row"><span></span><span>Delivery Convenience Fee&nbsp;&nbsp;${money(convenienceCharge)}</span></div>` : ''}
     ${Math.abs(roundOff) >= 0.01 ? `<div class="row"><span></span><span>Round off&nbsp;&nbsp;${roundOff >= 0 ? '+' : ''}${money(roundOff)}</span></div>` : ''}
     <div class="hr"></div>
     <div class="row grand"><span>Grand Total</span><span>₹ ${grand.toFixed(2)}</span></div>

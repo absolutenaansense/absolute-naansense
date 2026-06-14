@@ -11,7 +11,7 @@ import { Package, Clock, CheckCircle2, Truck, XCircle, ChevronDown, ChevronUp, T
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import PayAheadQR from '../../components/customer/PayAheadQR'
 import TaxInvoiceModal from '../../components/TaxInvoiceModal'
-import { parseOrderNotes, getOrderMeta } from '../../utils/orderNotes'
+import { parseOrderNotes, getOrderMeta, orderFees } from '../../utils/orderNotes'
 import { useState, useEffect } from 'react'
 import { supabase } from '../../services/supabase'
 
@@ -73,9 +73,7 @@ function OrderCard({ order }) {
   const eta = (isActive && !['pending', 'payment_received'].includes(liveStatus)) ? etaInfo(order.confirmedAt, now) : null
 
   const meta = getOrderMeta(order)
-  const subtotal = (order.items || []).reduce((s, it) => s + parseFloat(it.price) * it.quantity, 0)
-  const gst = Math.round(subtotal * 0.05)
-  const delivery = Math.max(0, Math.round(parseFloat(order.total) - subtotal - gst))
+  const { subtotal, gst, delivery, convenience } = orderFees(order)
 
   return (
     <div className="card mb-3 overflow-hidden">
@@ -140,6 +138,7 @@ function OrderCard({ order }) {
             <div className="border-t border-stone-100 mt-2 pt-2 space-y-0.5 text-xs text-stone-500">
               <div className="flex justify-between"><span>Subtotal</span><span>₹{subtotal.toFixed(0)}</span></div>
               {delivery > 0 && <div className="flex justify-between"><span>Delivery</span><span>₹{delivery}</span></div>}
+              {convenience > 0 && <div className="flex justify-between"><span>Delivery convenience</span><span>₹{convenience}</span></div>}
               <div className="flex justify-between"><span>GST (5%)</span><span>₹{gst}</span></div>
               <div className="flex justify-between text-sm font-semibold text-stone-900 pt-0.5"><span>Total</span><span>₹{parseFloat(order.total).toFixed(0)}</span></div>
             </div>

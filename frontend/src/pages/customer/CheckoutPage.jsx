@@ -13,10 +13,9 @@ import { addressApi, ordersApi } from '../../services/api'
 import { supabase } from '../../services/supabase'
 import { formatIST } from '../../utils/dateIST'
 import { buildCustomerNotes } from '../../utils/orderNotes'
+import { computeDelivery } from '../../utils/deliveryFee'
 import { RESTAURANT } from '../../config/restaurant'
 
-const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
-const FREE_DELIVERY_THRESHOLD = 501 // orders >= this amount get free delivery
 const GST_RATE = 0.05 // 5% GST applied to every order's subtotal
 
 // Ordering hours (IST, minutes from midnight):
@@ -82,13 +81,12 @@ export default function CheckoutPage() {
   }
 
   const subtotal = getTotal()
-  // Test order: only the ₹1 test item in the cart → waive the delivery fee.
+  // Test order: only the ₹1 test item in the cart → waive all fees.
   const cartItems = Object.values(items)
   const isTestOrder = cartItems.length > 0 && cartItems.every(({ item }) => parseFloat(item.price) <= 1)
-  // No delivery charge on take-away orders (or test orders).
-  const deliveryFee = (orderType === 'DELIVERY' && subtotal < FREE_DELIVERY_THRESHOLD && !isTestOrder) ? DELIVERY_FEE : 0
   const gst = Math.round(subtotal * GST_RATE)
-  const total = subtotal + deliveryFee + gst
+  // deliveryFee / convenienceFee / total are computed below, once the selected
+  // address is known (the rules depend on the address + outlet + time).
 
   // Pickup is a time today, at least 30 minutes out (preparation time).
   const pad2 = n => String(n).padStart(2, '0')
@@ -113,6 +111,15 @@ export default function CheckoutPage() {
       if (def) setSelectedAddressId(def.id)
     }
   }, [addresses, selectedAddressId])
+
+  // Resolve the chosen address and apply the delivery-fee rules (outlet + address
+  // keywords + time). Convenience fee is added whenever delivery comes out free.
+  const selectedAddress = addresses.find(a => a.id === selectedAddressId)
+  const addressText = selectedAddress
+    ? `${selectedAddress.line1}${selectedAddress.line2 ? ', ' + selectedAddress.line2 : ''}, ${selectedAddress.city} - ${selectedAddress.pincode}`
+    : ''
+  const { deliveryFee, convenienceFee, label: deliveryLabel } = computeDelivery({ outlet, orderType, address: addressText, subtotal, isTestOrder })
+  const total = subtotal + gst + deliveryFee + convenienceFee
 
   const handleSetDefault = async (addressId) => {
     try { await addressApi.setDefault(user.id, addressId); await refetchProfile(); toast.success('Default address set') }
@@ -222,10 +229,6 @@ export default function CheckoutPage() {
     setConfirming(true)
     try {
       const orderItems = getOrderItems()
-      const selectedAddress = addresses.find(a => a.id === selectedAddressId)
-      const addressText = selectedAddress
-        ? `${selectedAddress.line1}${selectedAddress.line2 ? ', ' + selectedAddress.line2 : ''}, ${selectedAddress.city} - ${selectedAddress.pincode}`
-        : null
       const pickupAt = orderType === 'TAKEAWAY' ? (pickupDateObj()?.toISOString() || null) : null
       const { data } = await ordersApi.createOrder({
         userId: user.id,
@@ -234,9 +237,9 @@ export default function CheckoutPage() {
         total,
         orderType,
         outlet,
-        deliveryAddress: addressText,
+        deliveryAddress: addressText || null,
         pickupAt,
-        notes: buildCustomerNotes({ text: orderNote, outlet }),
+        notes: buildCustomerNotes({ text: orderNote, outlet, deliveryFee, convenienceFee, deliveryLabel }),
       })
       // Online payment → open Cashfree. Abort to confirmation only if it succeeds.
       if (pm === 'QR_UPI') {
@@ -249,7 +252,7 @@ export default function CheckoutPage() {
         ref: data.id, name: user?.name || null, phone: user?.phone || null, address: addressText,
         orderType, pickupAt,
         items: Object.values(items).map(({ item, quantity, note }) => ({ name: item.name, price: parseFloat(item.price), quantity, note: note || '' })),
-        subtotal, gst, deliveryFee, total,
+        subtotal, gst, deliveryFee, convenienceFee, deliveryLabel, total,
         dateStr: formatIST(new Date().toISOString(), 'dd/MM/yy HH:mm'),
       })
       orderPlacedRef.current = true   // set before clearCart so the render guard never redirects
@@ -396,9 +399,17 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-sm text-stone-500">
                 <span>GST (5%)</span><span>₹{gst}</span>
               </div>
-              <div className="flex justify-between text-sm text-stone-500">
-                <span>Delivery fee</span><span>{deliveryFee > 0 ? `₹${deliveryFee}` : 'Free'}</span>
-              </div>
+              {orderType === 'DELIVERY' && (
+                <div className="flex justify-between text-sm text-stone-500">
+                  <span>Delivery fee{deliveryLabel && deliveryFee > 0 ? <span className="text-stone-400"> · {deliveryLabel}</span> : ''}</span>
+                  <span>{deliveryFee > 0 ? `₹${deliveryFee}` : 'Free'}</span>
+                </div>
+              )}
+              {convenienceFee > 0 && (
+                <div className="flex justify-between text-sm text-stone-500">
+                  <span>Delivery convenience fee</span><span>₹{convenienceFee}</span>
+                </div>
+              )}
               <div className="flex justify-between text-base font-semibold text-stone-900 pt-1">
                 <span>Total</span><span>₹{total.toFixed(0)}</span>
               </div>
@@ -667,7 +678,8 @@ export default function CheckoutPage() {
                   <div className="border-t border-stone-100 mt-3 pt-3 space-y-1 text-sm">
                     <div className="flex justify-between text-stone-500"><span>Subtotal</span><span>₹{placedSnapshot.subtotal.toFixed(0)}</span></div>
                     <div className="flex justify-between text-stone-500"><span>GST (5%)</span><span>₹{placedSnapshot.gst}</span></div>
-                    <div className="flex justify-between text-stone-500"><span>Delivery fee</span><span>{placedSnapshot.deliveryFee > 0 ? `₹${placedSnapshot.deliveryFee}` : 'Free'}</span></div>
+                    {placedSnapshot.orderType !== 'TAKEAWAY' && <div className="flex justify-between text-stone-500"><span>Delivery fee{placedSnapshot.deliveryLabel && placedSnapshot.deliveryFee > 0 ? ` · ${placedSnapshot.deliveryLabel}` : ''}</span><span>{placedSnapshot.deliveryFee > 0 ? `₹${placedSnapshot.deliveryFee}` : 'Free'}</span></div>}
+                    {placedSnapshot.convenienceFee > 0 && <div className="flex justify-between text-stone-500"><span>Delivery convenience fee</span><span>₹{placedSnapshot.convenienceFee}</span></div>}
                     <div className="flex justify-between font-semibold text-stone-900 pt-1"><span>Total</span><span>₹{placedSnapshot.total.toFixed(0)}</span></div>
                   </div>
                   {placedSnapshot.orderType === 'TAKEAWAY' && placedSnapshot.pickupAt && <div className="mt-3 text-xs text-stone-500"><span className="text-stone-400">Pickup at: </span>{formatIST(placedSnapshot.pickupAt, 'dd MMM, h:mm a')}</div>}
