@@ -363,6 +363,18 @@ export const customersApi = {
     if (error) throw { response: { data: { error: error.message } } }
     return { data: data || [] }
   },
+
+  // Admin edit of a customer's contact details.
+  update: async (id, { name, phone, email }) => {
+    const { data, error } = await supabase
+      .from('User')
+      .update({ name, phone, email: email || null, updatedAt: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data }
+  },
 }
 
 // --- Reports ---
