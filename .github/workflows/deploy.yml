@@ -34,11 +34,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Served at the apex custom domain (absolutenaansense.com), so base is root.
-      # The CNAME file in frontend/public/ is copied into dist/ and tells
-      # GitHub Pages which custom domain to serve.
+      # Served at an apex custom domain, so base is root.
       - name: Build
         run: npm run build -- --base=/
+
+      # Per-repo custom domain: this same codebase lives in two repos.
+      #   absolutenaansense        -> absolutenaansense.com (customers)
+      #   absolutenaansense-in     -> absolutenaansense.in  (staff / backend)
+      - name: Add CNAME for this repo's domain
+        run: |
+          if [ "${{ github.repository }}" = "absolutenaansense/absolutenaansense-in" ]; then
+            echo "absolutenaansense.in" > dist/CNAME
+          else
+            echo "absolutenaansense.com" > dist/CNAME
+          fi
 
       # SPA fallback: GitHub Pages serves 404.html for unknown paths,
       # so deep links / refreshes boot the app and React Router takes over.
