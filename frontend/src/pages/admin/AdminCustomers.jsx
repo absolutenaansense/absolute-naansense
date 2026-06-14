@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, RefreshCw, UserRound, Pencil, X } from 'lucide-react'
+import { Search, RefreshCw, UserRound, Pencil, X, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
 import { customersApi } from '../../services/api'
@@ -15,13 +15,33 @@ export default function AdminCustomers() {
     queryFn: () => customersApi.list().then(r => r.data),
   })
 
+  const openEdit = async (c) => {
+    setEdit({ id: c.id, name: c.name || '', phone: c.phone || '', email: c.email || '', addr: { line1: '', line2: '', city: '', pincode: '' } })
+    try {
+      const { data } = await customersApi.primaryAddress(c.id)
+      if (data) setEdit(p => (p && p.id === c.id) ? { ...p, addr: { id: data.id, line1: data.line1 || '', line2: data.line2 || '', city: data.city || '', pincode: data.pincode || '' } } : p)
+    } catch { /* ignore */ }
+  }
+
+  const setAddr = (patch) => setEdit(p => ({ ...p, addr: { ...p.addr, ...patch } }))
+
   const saveEdit = async () => {
     if (!edit.name || !edit.phone) { toast.error('Name and phone are required'); return }
     setSaving(true)
     try {
       await customersApi.update(edit.id, { name: edit.name, phone: edit.phone, email: edit.email })
+      await customersApi.saveAddress(edit.id, edit.addr)
       toast.success('Customer updated'); setEdit(null); await refetch()
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to update') } finally { setSaving(false) }
+  }
+
+  const removeCustomer = async (c) => {
+    if (!confirm(`Delete ${c.name || c.phone}? This removes the account.${c.orderCount ? ' Their past orders are kept but anonymised (for tax records).' : ''}`)) return
+    try {
+      const { data } = await customersApi.remove(c.id)
+      toast.success(data.anonymized ? 'Account anonymised (had past orders)' : 'Customer deleted')
+      await refetch()
+    } catch (e) { toast.error(e.response?.data?.error || 'Failed to delete') }
   }
 
   const filtered = useMemo(() => {
@@ -78,7 +98,10 @@ export default function AdminCustomers() {
                   <td className="px-4 py-2.5 text-stone-700">{c.orderCount}</td>
                   <td className="px-4 py-2.5 text-stone-500 whitespace-nowrap">{c.createdAt ? formatIST(c.createdAt, 'dd MMM yyyy') : '—'}</td>
                   <td className="px-4 py-2.5">
-                    <button onClick={() => setEdit({ id: c.id, name: c.name || '', phone: c.phone || '', email: c.email || '' })} title="Edit" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => openEdit(c)} title="Edit" className="w-7 h-7 flex items-center justify-center rounded-md border border-stone-200 text-stone-500 hover:bg-stone-50"><Pencil size={14} /></button>
+                      <button onClick={() => removeCustomer(c)} title="Delete" className="w-7 h-7 flex items-center justify-center rounded-md border border-red-200 text-red-500 hover:bg-red-50"><Trash2 size={14} /></button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -98,6 +121,15 @@ export default function AdminCustomers() {
               <div><label className="label">Name</label><input className="input" value={edit.name} onChange={e => setEdit(p => ({ ...p, name: e.target.value }))} /></div>
               <div><label className="label">Phone</label><input className="input" value={edit.phone} onChange={e => setEdit(p => ({ ...p, phone: e.target.value }))} maxLength={10} /></div>
               <div><label className="label">Email</label><input className="input" value={edit.email} onChange={e => setEdit(p => ({ ...p, email: e.target.value }))} placeholder="optional" /></div>
+              <div className="pt-2 border-t border-stone-100">
+                <div className="label mb-1">Address</div>
+                <input className="input mb-2" value={edit.addr?.line1 || ''} onChange={e => setAddr({ line1: e.target.value })} placeholder="Flat / house, area" />
+                <input className="input mb-2" value={edit.addr?.line2 || ''} onChange={e => setAddr({ line2: e.target.value })} placeholder="Landmark (optional)" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="input" value={edit.addr?.city || ''} onChange={e => setAddr({ city: e.target.value })} placeholder="City" />
+                  <input className="input" value={edit.addr?.pincode || ''} onChange={e => setAddr({ pincode: e.target.value })} placeholder="Pincode" maxLength={6} />
+                </div>
+              </div>
             </div>
             <div className="flex gap-2 mt-4">
               <button onClick={() => setEdit(null)} disabled={saving} className="btn-secondary flex-1 justify-center">Cancel</button>

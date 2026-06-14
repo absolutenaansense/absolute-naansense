@@ -8,7 +8,7 @@ import { ordersApi } from '../../services/api'
 import { printTicket } from '../../utils/printKot'
 import { getOrderMeta, itemNote } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
-import { playRing, notify, requestNotifyPermission, armAudio } from '../../utils/notify'
+import { playRing, notify, requestNotifyPermission, armAudio, flashTitle, isAway } from '../../utils/notify'
 
 // Mounted once per biller app. When a new online order lands (any screen), it
 // rings + raises a Chrome notification AND pops a center-screen confirm dialog
@@ -20,6 +20,8 @@ export default function OrderAlerts() {
   const seen = useRef(new Set())     // order ids already alerted/queued (dedupe)
   const [queue, setQueue] = useState([])   // full orders awaiting the biller's decision
   const [busy, setBusy] = useState(false)
+  const [cancelMode, setCancelMode] = useState(false)   // remark field revealed
+  const [cancelRemark, setCancelRemark] = useState('')
 
   useEffect(() => { armAudio(); requestNotifyPermission() }, [])
 
@@ -29,8 +31,11 @@ export default function OrderAlerts() {
   const raise = async (row) => {
     if (!mine(row) || row.status !== 'payment_received' || seen.current.has(row.id)) return
     seen.current.add(row.id)
+    const away = isAway()                       // biller not looking at the tab?
     playRing()
-    notify('New order — needs confirmation', `#${String(row.id).slice(0, 8).toUpperCase()} · ₹${parseFloat(row.total).toFixed(0)}`, `${import.meta.env.BASE_URL}logo.jpg`)
+    if (away) setTimeout(playRing, 1500)        // ring twice when away
+    notify('🔔 New online order — confirm now', `#${String(row.id).slice(0, 8).toUpperCase()} · ₹${parseFloat(row.total).toFixed(0)}`, `${import.meta.env.BASE_URL}logo.jpg`, away)
+    if (away) flashTitle('🔔 NEW ORDER!')
     qc.invalidateQueries({ queryKey: ['admin-orders'] })
     try {
       const { data } = await ordersApi.getOrder(row.id)
@@ -61,7 +66,7 @@ export default function OrderAlerts() {
   }, [orders]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const current = queue[0]
-  const drop = (id) => setQueue(q => q.filter(o => o.id !== id))
+  const drop = (id) => { setQueue(q => q.filter(o => o.id !== id)); setCancelMode(false); setCancelRemark('') }
 
   const doConfirm = async () => {
     if (!current) return
@@ -80,7 +85,7 @@ export default function OrderAlerts() {
     if (!current) return
     setBusy(true)
     try {
-      await ordersApi.cancelOrder(current.id, '')
+      await ordersApi.cancelOrder(current.id, cancelRemark.trim())
       toast.success('Order cancelled')
       qc.invalidateQueries({ queryKey: ['admin-orders'] })
       drop(current.id)
@@ -143,9 +148,23 @@ export default function OrderAlerts() {
           </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-stone-100 flex gap-2">
-          <button disabled={busy} onClick={doCancel} className="px-4 py-3 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium flex items-center gap-1.5"><X size={16} /> Cancel</button>
-          <button disabled={busy} onClick={doConfirm} className="flex-1 btn-primary justify-center py-3 rounded-xl"><Check size={16} /> Confirm &amp; print KOT</button>
+        <div className="px-5 py-4 border-t border-stone-100">
+          {cancelMode ? (
+            <div className="space-y-2">
+              <textarea autoFocus value={cancelRemark} onChange={e => setCancelRemark(e.target.value)} rows={2}
+                placeholder="Cancellation reason (e.g. item out of stock, address unreachable)…"
+                className="w-full text-sm bg-stone-50 border border-stone-200 rounded-lg px-3 py-2 resize-none" />
+              <div className="flex gap-2">
+                <button disabled={busy} onClick={() => setCancelMode(false)} className="px-4 py-2.5 rounded-xl border border-stone-200 text-stone-600 text-sm">← Back</button>
+                <button disabled={busy} onClick={doCancel} className="flex-1 justify-center py-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-medium flex items-center gap-1.5"><X size={16} /> Confirm cancellation</button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button disabled={busy} onClick={() => setCancelMode(true)} className="px-4 py-3 rounded-xl border border-red-200 text-red-600 hover:bg-red-50 text-sm font-medium flex items-center gap-1.5"><X size={16} /> Cancel</button>
+              <button disabled={busy} onClick={doConfirm} className="flex-1 btn-primary justify-center py-3 rounded-xl"><Check size={16} /> Confirm &amp; print KOT</button>
+            </div>
+          )}
         </div>
       </div>
     </div>

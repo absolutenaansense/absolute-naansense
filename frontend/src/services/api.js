@@ -438,6 +438,44 @@ export const customersApi = {
     if (error) throw { response: { data: { error: error.message } } }
     return { data }
   },
+
+  // The customer's primary (default, else most recent) saved address.
+  primaryAddress: async (userId) => {
+    const { data, error } = await supabase
+      .from('Address').select('*').eq('userId', userId)
+      .order('isDefault', { ascending: false }).order('createdAt', { ascending: false }).limit(1)
+    if (error) throw { response: { data: { error: error.message } } }
+    return { data: (data && data[0]) || null }
+  },
+
+  // Create/update the customer's address from the admin edit screen.
+  saveAddress: async (userId, addr) => {
+    const payload = { label: addr.label || 'Home', line1: addr.line1 || '', line2: addr.line2 || null, city: addr.city || '', pincode: addr.pincode || '' }
+    if (addr.id) {
+      const { error } = await supabase.from('Address').update(payload).eq('id', addr.id)
+      if (error) throw { response: { data: { error: error.message } } }
+    } else if (payload.line1 || payload.city || payload.pincode) {
+      const { error } = await supabase.from('Address').insert([{ userId, ...payload }])
+      if (error) throw { response: { data: { error: error.message } } }
+    }
+    return { data: { success: true } }
+  },
+
+  // Delete a customer. Hard-delete when possible; if past orders block it (kept for
+  // tax/legal records), anonymise so no personal data remains.
+  remove: async (id) => {
+    await supabase.from('Address').delete().eq('userId', id)
+    const { error } = await supabase.from('User').delete().eq('id', id)
+    if (error) {
+      const stamp = Date.now().toString(36)
+      const { error: anonErr } = await supabase.from('User')
+        .update({ name: 'Deleted account', email: null, phone: `deleted-${String(id).slice(0, 8)}-${stamp}`, passwordHash: 'account-deleted', isVerified: false })
+        .eq('id', id)
+      if (anonErr) throw { response: { data: { error: anonErr.message } } }
+      return { data: { anonymized: true } }
+    }
+    return { data: { deleted: true } }
+  },
 }
 
 // --- Reports ---

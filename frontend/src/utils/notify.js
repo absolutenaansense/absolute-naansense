@@ -49,10 +49,38 @@ export function requestNotifyPermission() {
   try { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission() } catch {}
 }
 
-export function notify(title, body, icon) {
+// `hard` = the biller isn't looking at the tab: keep the notification on screen
+// until clicked (requireInteraction), and clicking it focuses the dashboard.
+export function notify(title, body, icon, hard = false) {
   try {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification(title, { body, icon, tag: 'naansense-order', renotify: true })
+      const n = new Notification(title, { body, icon, tag: 'naansense-order', renotify: true, requireInteraction: hard })
+      n.onclick = () => { try { window.focus() } catch {} n.close() }
     }
   } catch {}
+}
+
+// Flash the browser tab title until the biller returns to the tab. This is the
+// closest a web app can get to a "pop the window to the front" alert — browsers
+// block opening real windows without a click.
+let titleTimer = null
+export function flashTitle(msg) {
+  if (titleTimer) return
+  const orig = document.title
+  let on = false
+  const stop = () => {
+    if (!titleTimer) return
+    clearInterval(titleTimer); titleTimer = null; document.title = orig
+    document.removeEventListener('visibilitychange', onVis)
+    window.removeEventListener('focus', stop)
+  }
+  const onVis = () => { if (!document.hidden) stop() }
+  titleTimer = setInterval(() => { document.title = (on = !on) ? msg : orig }, 1000)
+  document.addEventListener('visibilitychange', onVis)
+  window.addEventListener('focus', stop)
+}
+
+// True when the biller is not actively viewing the dashboard tab.
+export function isAway() {
+  try { return document.hidden || !document.hasFocus() } catch { return false }
 }
