@@ -162,8 +162,10 @@ export default function ProfilePage() {
         {/* Privacy & account controls */}
         <div className="card p-4">
           <div className="text-xs font-semibold text-stone-400 uppercase tracking-wider mb-3">Privacy & data</div>
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm mb-4">
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm mb-4">
+            <Link to="/contact" className="text-brand-600 font-medium hover:underline">Contact Us</Link>
             <Link to="/terms" className="text-brand-600 font-medium hover:underline">Terms & Conditions</Link>
+            <Link to="/refund" className="text-brand-600 font-medium hover:underline">Cancellation & Refund</Link>
             <Link to="/privacy" className="text-brand-600 font-medium hover:underline">Privacy Policy</Link>
           </div>
           <p className="text-xs text-stone-500 leading-relaxed mb-3">

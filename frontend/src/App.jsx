@@ -11,6 +11,9 @@ import OrdersPage from './pages/customer/OrdersPage'
 import ProfilePage from './pages/customer/ProfilePage'
 import TermsPage from './pages/customer/TermsPage'
 import PrivacyPage from './pages/customer/PrivacyPage'
+import ContactPage from './pages/customer/ContactPage'
+import RefundPage from './pages/customer/RefundPage'
+import FloatingContact from './components/customer/FloatingContact'
 
 // Staff panels (role-based)
 import PanelGate from './staff/PanelGate'
@@ -37,6 +40,8 @@ const STAFF_ENABLED = !IS_COM
 
 export default function App() {
   return (
+    <>
+    {CUSTOMER_ENABLED && <FloatingContact />}
     <Routes>
       {/* Customer routes — browsing is public; only orders/profile need login */}
       {CUSTOMER_ENABLED && (
@@ -45,6 +50,8 @@ export default function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/contact" element={<ContactPage />} />
+          <Route path="/refund" element={<RefundPage />} />
           <Route path="/" element={<OutletSelectPage />} />
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
@@ -71,5 +78,6 @@ export default function App() {
       {/* Anything else → the home for this domain (staff landing on .in, ordering on .com) */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   )
 }

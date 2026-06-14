@@ -27,8 +27,10 @@ export default function LegalLayout({ title, updated, children }) {
           {children}
         </div>
 
-        <div className="mt-8 pt-5 border-t border-stone-100 flex gap-4 text-sm">
+        <div className="mt-8 pt-5 border-t border-stone-100 flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+          <Link to="/contact" className="text-brand-600 font-medium hover:underline">Contact Us</Link>
           <Link to="/terms" className="text-brand-600 font-medium hover:underline">Terms &amp; Conditions</Link>
+          <Link to="/refund" className="text-brand-600 font-medium hover:underline">Cancellation &amp; Refund</Link>
           <Link to="/privacy" className="text-brand-600 font-medium hover:underline">Privacy Policy</Link>
         </div>
       </main>
