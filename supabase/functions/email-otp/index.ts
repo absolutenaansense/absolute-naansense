@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
       await admin.from('PasswordOtp').delete().ilike('email', e)   // clear old codes
       const { error: insErr } = await admin.from('PasswordOtp').insert([{ email: e, code: otp, expiresAt }])
       if (insErr) return json({ error: insErr.message }, 400)
-      try { await sendEmail(e, otp) } catch (err) { return json({ error: 'Could not send email: ' + String(err.message || err) }, 400) }
+      try { await sendEmail(e, otp) } catch (err) { console.error('resend send failed:', err); return json({ error: "We couldn't send the code right now. Please try again shortly or contact us on WhatsApp." }, 400) }
       return json({ sent: true })
     }
 
