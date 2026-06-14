@@ -74,11 +74,12 @@ export default function AdminMenu() {
   const [editingItem, setEditingItem] = useState(null)
   const [adding, setAdding] = useState(false)
   const [search, setSearch] = useState('')
+  const [outletSel, setOutletSel] = useState('renukoot')
   const queryClient = useQueryClient()
 
   const { data } = useQuery({
-    queryKey: ['menu'],
-    queryFn: () => menuApi.getMenu().then(r => r.data),
+    queryKey: ['menu', outletSel],
+    queryFn: () => menuApi.getMenu(outletSel, true).then(r => r.data),
   })
 
   const { data: categories = [] } = useQuery({
@@ -87,7 +88,7 @@ export default function AdminMenu() {
   })
 
   const { mutate: addItem } = useMutation({
-    mutationFn: (item) => menuApi.addItem({ ...item, isAvailable: true }),
+    mutationFn: (item) => menuApi.addItem({ ...item, isAvailable: true, outlet: outletSel }),
     onSuccess: () => { queryClient.invalidateQueries(['menu']); setAdding(false); toast.success('Item added') },
     onError: (e) => toast.error(e.response?.data?.error || 'Failed to add item'),
   })
@@ -117,7 +118,11 @@ export default function AdminMenu() {
         <AddItemModal categories={categories} onClose={() => setAdding(false)} onSave={(item) => addItem(item)} />
       )}
 
-      <div className="flex items-center gap-3 mb-5">
+      <div className="flex items-center gap-3 mb-5 flex-wrap">
+        <select value={outletSel} onChange={e => setOutletSel(e.target.value)} className="text-sm bg-white border border-stone-200 rounded-xl px-3 py-2">
+          <option value="renukoot">Renukoot menu</option>
+          <option value="renusagar">Renusagar menu</option>
+        </select>
         <div className="relative flex-1 max-w-md">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input
@@ -128,7 +133,7 @@ export default function AdminMenu() {
           />
         </div>
         <button onClick={() => setAdding(true)} className="btn-primary text-sm whitespace-nowrap">
-          <Plus size={15} /> Add menu item
+          <Plus size={15} /> Add to {outletSel === 'renusagar' ? 'Renusagar' : 'Renukoot'}
         </button>
       </div>
 
@@ -146,8 +151,9 @@ export default function AdminMenu() {
                 <div className="flex items-center gap-3">
                   <VegDot isVeg={item.isVeg} />
                   <div>
-                    <div className={`text-sm font-medium ${item.isAvailable ? 'text-stone-800' : 'text-stone-400 line-through'}`}>
+                    <div className={`text-sm font-medium flex items-center gap-2 ${item.isAvailable ? 'text-stone-800' : 'text-stone-400 line-through'}`}>
                       {item.name}
+                      {!item.outlet && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-stone-100 text-stone-500">both outlets</span>}
                     </div>
                     {item.description && <div className="text-xs text-stone-400">{item.description}</div>}
                   </div>

@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Plus, Minus, X, Printer, Receipt, Search, Trash2, Clock, Pause, Play, ShoppingBag, Pencil, ArrowRightLeft, Truck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
-import { menuApi, dineApi } from '../../services/api'
+import { menuApi, dineApi, captainApi } from '../../services/api'
 import { getOrderMeta } from '../../utils/orderNotes'
 import { formatIST } from '../../utils/dateIST'
 import { printTicket } from '../../utils/printKot'
@@ -25,6 +25,7 @@ const elapsedMin = (createdAt) => {
 }
 const stateOf = (order) => {
   if (!order) return 'blank'
+  if (order.status === 'payment_received') return 'captain'   // captain order awaiting confirmation
   if (order.paymentStatus === 'paid') return 'paid'
   if (order.billPrinted) return 'printed'
   return 'running'
@@ -34,9 +35,11 @@ const TILE = {
   running: 'bg-blue-50 border-blue-300',
   printed: 'bg-green-50 border-green-300',
   paid: 'bg-amber-50 border-amber-300',
+  captain: 'bg-yellow-50 border-yellow-400 ring-2 ring-yellow-200',
 }
 const LEGEND = [
   ['blank', 'Free', 'bg-white border-stone-300'],
+  ['captain', 'Captain — confirm', 'bg-yellow-100 border-yellow-400'],
   ['running', 'Running', 'bg-blue-100 border-blue-300'],
   ['printed', 'Printed', 'bg-green-100 border-green-300'],
   ['paid', 'Paid', 'bg-amber-100 border-amber-300'],
@@ -83,7 +86,7 @@ export default function AdminDineIn() {
   const sections = floorFor(outlet)       // outlet-specific floor layout
   const allTables = tablesFor(outlet)
 
-  const { data: menu } = useQuery({ queryKey: ['dine-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
+  const { data: menu } = useQuery({ queryKey: ['dine-menu', outlet], queryFn: () => menuApi.getMenu(outlet).then(r => r.data.categories) })
   const { data: openOrders = [], refetch } = useQuery({
     queryKey: ['dine-open', outlet], queryFn: () => dineApi.openOrders(outlet).then(r => r.data), refetchInterval: 10000,
   })
@@ -175,6 +178,18 @@ export default function AdminDineIn() {
     setBusy(true)
     try { const { data } = await dineApi.markBillPrinted(activeOrder.id); setInvoiceOrder(data); await refetch() }
     catch (e) { toast.error('Failed to generate tax invoice') } finally { setBusy(false) }
+  }
+
+  // Confirm a captain order (status 'payment_received'): stamp a KOT, print it, mark
+  // the table running. After this it behaves like any other dine-in order.
+  const confirmCaptain = async () => {
+    if (!activeOrder) return
+    setBusy(true)
+    try {
+      const { data, kotNo } = await captainApi.confirm(activeOrder.id)
+      printTicket({ ...data, kotNo }, { title: 'KOT', showPrices: false })
+      toast.success('Captain order confirmed — KOT printed'); await refetch()
+    } catch (e) { toast.error('Failed to confirm') } finally { setBusy(false) }
   }
 
   const openSettle = () => { setDiscount(''); setComplimentary(false); setPayMode('cash'); setPartAmt(''); setSettleOpen(true) }
@@ -535,7 +550,25 @@ export default function AdminDineIn() {
                     className="w-full text-sm bg-white border border-stone-200 rounded-lg px-3 py-2" />
                 </div>
 
-                {isDineIn && state === 'paid' ? (
+                {isDineIn && state === 'captain' ? (
+                  /* Captain order awaiting confirmation: review + confirm (prints KOT) or cancel */
+                  <div className="card p-4 space-y-3 border-2 border-yellow-300">
+                    <div className="text-sm font-semibold text-yellow-700">Captain order — needs confirmation</div>
+                    <div className="space-y-1.5">
+                      {committed.map(it => (
+                        <div key={it.id} className="text-sm">
+                          <div className="flex justify-between"><span className="text-stone-700">{(it.menuItem?.name || it.itemName)} × {it.quantity}</span><span className="font-medium">₹{(parseFloat(it.price) * it.quantity).toFixed(0)}</span></div>
+                          {it.specialRequest && <div className="text-xs font-semibold text-amber-700 pl-1">★ {it.specialRequest}</div>}
+                        </div>
+                      ))}
+                      <div className="border-t border-stone-100 pt-2 flex justify-between text-sm font-semibold"><span>Total (incl. GST)</span><span>₹{committedTotals.total.toFixed(0)}</span></div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button disabled={busy} onClick={cancelOrder} className="px-4 py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-sm"><Trash2 size={14} className="inline" /> Cancel</button>
+                      <button disabled={busy} onClick={confirmCaptain} className="flex-1 btn-primary justify-center py-2.5 rounded-xl"><Printer size={15} /> Confirm &amp; print KOT</button>
+                    </div>
+                  </div>
+                ) : isDineIn && state === 'paid' ? (
                   /* Paid state: just clear */
                   <div className="card p-4 text-center space-y-3 max-w-sm">
                     <div className="text-green-600 font-semibold">Paid ₹{committedTotals.total.toFixed(0)}</div>

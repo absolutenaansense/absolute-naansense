@@ -162,15 +162,17 @@ export const authApi = {
 
 // --- Menu ---
 export const menuApi = {
-  getMenu: async () => {
+  // outlet: when given, returns items for that outlet (null outlet = both). When
+  // omitted, returns everything (back-compat). includeUnavailable for admin views.
+  getMenu: async (outlet, includeUnavailable = false) => {
     const { data: categories, error: catError } = await supabase
       .from('Category')
-      .select('id, name, sortOrder, menuItems:MenuItem(id, name, description, price, isVeg, isAvailable)')
+      .select('id, name, sortOrder, menuItems:MenuItem(id, name, description, price, isVeg, isAvailable, outlet)')
       .eq('isActive', true)
       .order('sortOrder')
     if (catError) throw { response: { data: { error: catError.message } } }
     const filtered = categories
-      .map(cat => ({ ...cat, menuItems: (cat.menuItems || []).filter(i => i.isAvailable) }))
+      .map(cat => ({ ...cat, menuItems: (cat.menuItems || []).filter(i => (includeUnavailable || i.isAvailable) && (!outlet || !i.outlet || i.outlet === outlet)) }))
       .filter(cat => cat.menuItems.length > 0)
     return { data: { categories: filtered } }
   },
@@ -739,9 +741,9 @@ export const dineApi = {
       .select(POS_SELECT)
       .eq('orderType', 'DINE_IN')
       .not('tableLabel', 'is', null)
-      // 'payment_received' = a captain order still awaiting the biller's confirmation;
-      // it shows in the Captain queue, not on the floor, until confirmed (-> 'preparing').
-      .not('status', 'in', '("delivered","cancelled","payment_received")')
+      // Includes captain orders awaiting confirmation ('payment_received') so they
+      // show on the floor as a distinct "confirm" state, integrated with dine-in.
+      .not('status', 'in', '("delivered","cancelled")')
       .order('createdAt', { ascending: true })
     if (outlet) q = q.eq('outlet', outlet)
     const { data, error } = await q

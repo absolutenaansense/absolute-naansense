@@ -26,7 +26,7 @@ export default function CaptainApp() {
   const [noteOpen, setNoteOpen] = useState({})
   const [busy, setBusy] = useState(false)
 
-  const { data: menu } = useQuery({ queryKey: ['captain-menu'], queryFn: () => menuApi.getMenu().then(r => r.data.categories) })
+  const { data: menu } = useQuery({ queryKey: ['captain-menu', outlet], queryFn: () => menuApi.getMenu(outlet).then(r => r.data.categories) })
   const { data: openOrders = [] } = useQuery({ queryKey: ['captain-open', outlet], queryFn: () => dineApi.openOrders(outlet).then(r => r.data), refetchInterval: 15000 })
   const occupied = new Set(openOrders.map(o => o.tableLabel).filter(Boolean))
 

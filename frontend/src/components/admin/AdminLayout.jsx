@@ -10,7 +10,6 @@ import { useStaff } from '../../staff/StaffContext'
 // Nav per panel kind. `to` is relative to the panel base path ('' = index).
 const BILLER_NAV = [
   { to: '', icon: ShoppingBag, label: 'Online Orders', end: true },
-  { to: 'captain', icon: ConciergeBell, label: 'Captain Orders' },
   { to: 'dine-in', icon: Armchair, label: 'Dine-in' },
   { to: 'reservations', icon: Calendar, label: 'Reservations' },
   { to: 'reports', icon: BarChart3, label: 'Reports' },

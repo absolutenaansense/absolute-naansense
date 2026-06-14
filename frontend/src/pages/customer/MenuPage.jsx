@@ -81,7 +81,7 @@ export default function MenuPage() {
     enabled: !!outlet,
     queryFn: () => outlet?.source === 'static'
       ? Promise.resolve(renusagarMenu)
-      : menuApi.getMenu().then(r => r.data),
+      : menuApi.getMenu(outletId).then(r => r.data),
   })
 
   // No outlet chosen yet → back to the picker.

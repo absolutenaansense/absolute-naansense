@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { CheckCircle2, XCircle, Loader2, Plug, Lock } from 'lucide-react'
+import { Lock, Palette, Sun, Moon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import AdminLayout from '../../components/admin/AdminLayout'
-import { adminApi, authApi } from '../../services/api'
+import { authApi } from '../../services/api'
 import { useAuthStore } from '../../store/authStore'
+import { getTheme, applyTheme } from '../../utils/theme'
 
 export default function AdminSettings() {
   const { admin } = useAuthStore()
   const [pw, setPw] = useState({ current: '', next: '', confirm: '' })
   const [pwSaving, setPwSaving] = useState(false)
+  const [theme, setTheme] = useState(getTheme())
 
   const changePassword = async () => {
     if (pw.next.length < 6) { toast.error('New password must be at least 6 characters'); return }
@@ -19,35 +21,17 @@ export default function AdminSettings() {
       toast.success('Password changed'); setPw({ current: '', next: '', confirm: '' })
     } catch (e) { toast.error(e.response?.data?.error || 'Failed to change password') } finally { setPwSaving(false) }
   }
-  const [petpoojaStatus, setPetpoojaStatus] = useState(null) // null | 'testing' | 'ok' | 'fail'
-  const [petpoojaConfig, setPetpoojaConfig] = useState({
-    appKey: '',
-    appSecret: '',
-    accessToken: '',
-    restaurantId: '',
-  })
 
-  const testPetpooja = async () => {
-    setPetpoojaStatus('testing')
-    try {
-      const { data } = await adminApi.testPetpooja()
-      if (data.connected) {
-        setPetpoojaStatus('ok')
-        toast.success(`Connected! Restaurant: ${data.restaurantName}`)
-      } else {
-        setPetpoojaStatus('fail')
-        toast.error('PetPooja connection failed: ' + data.error)
-      }
-    } catch {
-      setPetpoojaStatus('fail')
-      toast.error('Connection failed — check credentials')
-    }
-  }
+  const pickTheme = (t) => { setTheme(t); applyTheme(t); toast.success(`${t === 'dark' ? 'Dark' : 'Light'} theme applied`) }
+
+  const THEMES = [
+    { key: 'light', label: 'Light · Olive green', icon: Sun, swatch: 'bg-brand-500' },
+    { key: 'dark', label: 'Dark mode', icon: Moon, swatch: 'bg-stone-800' },
+  ]
 
   return (
     <AdminLayout title="Settings">
       <div className="max-w-xl space-y-5">
-
         {/* Change password */}
         <div className="card p-5">
           <div className="flex items-center gap-2 mb-1">
@@ -65,94 +49,22 @@ export default function AdminSettings() {
           <button onClick={changePassword} disabled={pwSaving} className="btn-primary text-sm">{pwSaving ? 'Saving…' : 'Update password'}</button>
         </div>
 
-        {/* PetPooja */}
+        {/* Theme */}
         <div className="card p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-semibold text-stone-800">PetPooja POS integration</h3>
-              <p className="text-xs text-stone-400 mt-0.5">KOTs are pushed automatically when you confirm an order</p>
-            </div>
-            {petpoojaStatus === 'ok' && <CheckCircle2 size={20} className="text-green-500" />}
-            {petpoojaStatus === 'fail' && <XCircle size={20} className="text-red-400" />}
+          <div className="flex items-center gap-2 mb-1">
+            <Palette size={16} className="text-brand-500" />
+            <h3 className="text-sm font-semibold text-stone-800">Theme</h3>
           </div>
-
-          <div className="space-y-3 mb-4">
-            <div>
-              <label className="label">App key</label>
-              <input className="input font-mono text-sm" placeholder="From PetPooja dashboard → Settings → API" value={petpoojaConfig.appKey} onChange={e => setPetpoojaConfig(p => ({ ...p, appKey: e.target.value }))} />
-            </div>
-            <div>
-              <label className="label">App secret</label>
-              <input className="input font-mono text-sm" type="password" value={petpoojaConfig.appSecret} onChange={e => setPetpoojaConfig(p => ({ ...p, appSecret: e.target.value }))} />
-            </div>
-            <div>
-              <label className="label">Access token</label>
-              <input className="input font-mono text-sm" type="password" value={petpoojaConfig.accessToken} onChange={e => setPetpoojaConfig(p => ({ ...p, accessToken: e.target.value }))} />
-            </div>
-            <div>
-              <label className="label">Restaurant ID</label>
-              <input className="input font-mono text-sm" placeholder="e.g. ABN_RNK_001" value={petpoojaConfig.restaurantId} onChange={e => setPetpoojaConfig(p => ({ ...p, restaurantId: e.target.value }))} />
-            </div>
-          </div>
-
-          <div className="bg-stone-50 rounded-xl p-4 mb-4 text-xs text-stone-500">
-            <strong className="text-stone-700">How to get these credentials:</strong>
-            <ol className="mt-2 space-y-1 list-decimal list-inside">
-              <li>Log into your PetPooja dashboard</li>
-              <li>Go to Settings → API Integration</li>
-              <li>Copy App Key, App Secret, and Access Token</li>
-              <li>Your Restaurant ID is shown in your PetPooja account settings</li>
-            </ol>
-          </div>
-
-          <div className="flex gap-3">
-            <button className="btn-primary text-sm">Save credentials</button>
-            <button
-              onClick={testPetpooja}
-              disabled={petpoojaStatus === 'testing'}
-              className="btn-secondary text-sm"
-            >
-              {petpoojaStatus === 'testing' ? (
-                <><Loader2 size={14} className="animate-spin" /> Testing…</>
-              ) : (
-                <><Plug size={14} /> Test connection</>
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* KOT flow */}
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-stone-800 mb-4">KOT flow</h3>
-          <div className="space-y-4">
-            {[
-              { n: 1, title: 'Customer places order', desc: 'Order is created and payment is initiated' },
-              { n: 2, title: 'Payment confirmed', desc: 'Via Razorpay webhook (auto) or admin manual confirm' },
-              { n: 3, title: 'Admin clicks "Confirm & send KOT"', desc: 'This triggers POST to PetPooja /create-order' },
-              { n: 4, title: 'KOT printed at kitchen', desc: 'PetPooja routes to your kitchen printer automatically' },
-              { n: 5, title: 'Order status synced back', desc: 'Optional webhook from PetPooja updates order status in your app' },
-            ].map(step => (
-              <div key={step.n} className="flex gap-3">
-                <div className="w-6 h-6 rounded-full bg-brand-500 text-white text-xs font-semibold flex items-center justify-center flex-shrink-0 mt-0.5">
-                  {step.n}
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-stone-800">{step.title}</div>
-                  <div className="text-xs text-stone-400 mt-0.5">{step.desc}</div>
-                </div>
-              </div>
+          <p className="text-xs text-stone-400 mb-4">Applies to this device.</p>
+          <div className="grid grid-cols-2 gap-3">
+            {THEMES.map(({ key, label, icon: Icon, swatch }) => (
+              <button key={key} onClick={() => pickTheme(key)}
+                className={`flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${theme === key ? 'border-brand-500 bg-brand-50' : 'border-stone-200 hover:border-stone-300'}`}>
+                <span className={`w-8 h-8 rounded-lg ${swatch} flex items-center justify-center text-white`}><Icon size={16} /></span>
+                <span className="text-sm font-medium text-stone-800">{label}</span>
+              </button>
             ))}
           </div>
-        </div>
-
-        {/* Razorpay */}
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-stone-800 mb-1">Razorpay payments</h3>
-          <p className="text-xs text-stone-400 mb-4">Configured via backend environment variables. Webhook URL to add in Razorpay dashboard:</p>
-          <div className="bg-stone-900 text-green-400 rounded-xl px-4 py-3 font-mono text-xs">
-            https://your-backend.railway.app/api/payments/webhook
-          </div>
-          <div className="mt-3 text-xs text-stone-500">Select event: <code className="bg-stone-100 px-1.5 py-0.5 rounded text-stone-700">payment.captured</code></div>
         </div>
       </div>
     </AdminLayout>
