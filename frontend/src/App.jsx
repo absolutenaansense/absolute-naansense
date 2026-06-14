@@ -1,9 +1,10 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 
 // Customer pages
 import LoginPage from './pages/customer/LoginPage'
 import RegisterPage from './pages/customer/RegisterPage'
+import OutletSelectPage from './pages/customer/OutletSelectPage'
 import MenuPage from './pages/customer/MenuPage'
 import CheckoutPage from './pages/customer/CheckoutPage'
 import OrdersPage from './pages/customer/OrdersPage'
@@ -24,7 +25,8 @@ import AdminSettings from './pages/admin/AdminSettings'
 
 function CustomerRoute({ children }) {
   const { user } = useAuthStore()
-  return user ? children : <Navigate to="/login" replace />
+  const location = useLocation()
+  return user ? children : <Navigate to="/login" replace state={{ from: location.pathname }} />
 }
 
 function AdminRoute({ children }) {
@@ -35,13 +37,14 @@ function AdminRoute({ children }) {
 export default function App() {
   return (
     <Routes>
-      {/* Customer routes */}
+      {/* Customer routes — browsing is public; only orders/profile need login */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/terms" element={<TermsPage />} />
       <Route path="/privacy" element={<PrivacyPage />} />
-      <Route path="/" element={<CustomerRoute><MenuPage /></CustomerRoute>} />
-      <Route path="/checkout" element={<CustomerRoute><CheckoutPage /></CustomerRoute>} />
+      <Route path="/" element={<OutletSelectPage />} />
+      <Route path="/menu" element={<MenuPage />} />
+      <Route path="/checkout" element={<CheckoutPage />} />
       <Route path="/orders" element={<CustomerRoute><OrdersPage /></CustomerRoute>} />
       <Route path="/profile" element={<CustomerRoute><ProfilePage /></CustomerRoute>} />
 

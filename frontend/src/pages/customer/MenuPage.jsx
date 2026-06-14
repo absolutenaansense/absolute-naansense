@@ -1,12 +1,14 @@
 import { useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Plus, Minus, Search, ChevronRight } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Plus, Minus, Search, ChevronRight, MapPin } from 'lucide-react'
+import { useNavigate, Navigate } from 'react-router-dom'
 import { menuApi } from '../../services/api'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import { formatIST } from '../../utils/dateIST'
+import { getOutlet } from '../../config/outlets'
+import { renusagarMenu } from '../../data/renusagarMenu'
 
 function VegDot({ isVeg }) {
   return (
@@ -67,15 +69,23 @@ export default function MenuPage() {
   const { user } = useAuthStore()
   const hourIST = parseInt(formatIST(new Date().toISOString(), 'H'), 10)
   const greeting = hourIST < 12 ? 'Good morning' : hourIST < 17 ? 'Good afternoon' : 'Good evening'
-  const firstName = (user?.name || '').trim().split(' ')[0] || 'there'
+  const firstName = (user?.name || '').trim().split(' ')[0]
   const cartCount = useCartStore(s => s.getCount())
   const cartTotal = useCartStore(s => s.getTotal())
+  const outletId = useCartStore(s => s.outlet)
+  const outlet = getOutlet(outletId)
   const navigate = useNavigate()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['menu'],
-    queryFn: () => menuApi.getMenu().then(r => r.data),
+    queryKey: ['menu', outletId],
+    enabled: !!outlet,
+    queryFn: () => outlet?.source === 'static'
+      ? Promise.resolve(renusagarMenu)
+      : menuApi.getMenu().then(r => r.data),
   })
+
+  // No outlet chosen yet → back to the picker.
+  if (!outlet) return <Navigate to="/" replace />
 
   const filtered = data?.categories?.map(cat => ({
     ...cat,
@@ -92,9 +102,11 @@ export default function MenuPage() {
       <div className="bg-brand-500 px-4 pt-5 pb-16">
         <div className="flex items-center gap-3 mb-3">
           <img src={`${import.meta.env.BASE_URL}logo.jpg`} alt="Absolute Naansense" className="h-14 w-14 rounded-full object-cover ring-2 ring-white/60 shadow-sm" />
-          <div className="text-white/70 text-xs font-medium uppercase tracking-wider">Renukoot</div>
+          <button onClick={() => navigate('/')} className="flex items-center gap-1.5 text-white/90 text-xs font-medium bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-full transition-colors">
+            <MapPin size={12} /> {outlet.name} <span className="text-white/60">· Change</span>
+          </button>
         </div>
-        <h2 className="text-white text-xl font-semibold">{greeting}, {firstName} 👋</h2>
+        <h2 className="text-white text-xl font-semibold">{greeting}{firstName ? `, ${firstName}` : ''} 👋</h2>
         <p className="text-white/70 text-sm mt-1">
           {user?.isReturning ? 'Welcome back! Your favourites are waiting.' : 'What would you like today?'}
         </p>

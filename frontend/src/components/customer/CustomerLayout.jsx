@@ -38,14 +38,20 @@ export default function CustomerLayout({ children, showBack = false, title }) {
           </div>
 
           <div className="flex items-center gap-1">
-            <Link to="/orders" className="btn-ghost">
-              <ClipboardList size={18} />
-              <span className="hidden sm:inline text-sm">Orders</span>
-            </Link>
-            <Link to="/profile" className="btn-ghost">
-              <User size={18} />
-              <span className="hidden sm:inline text-sm">{user?.name?.split(' ')[0]}</span>
-            </Link>
+            {user ? (
+              <>
+                <Link to="/orders" className="btn-ghost">
+                  <ClipboardList size={18} />
+                  <span className="hidden sm:inline text-sm">Orders</span>
+                </Link>
+                <Link to="/profile" className="btn-ghost">
+                  <User size={18} />
+                  <span className="hidden sm:inline text-sm">{user?.name?.split(' ')[0]}</span>
+                </Link>
+              </>
+            ) : (
+              <Link to="/login" className="btn-ghost text-sm text-brand-600 font-medium">Sign in</Link>
+            )}
             {location.pathname !== '/checkout' && (
               <Link to="/checkout" className="relative btn-ghost">
                 <ShoppingCart size={18} />

@@ -193,7 +193,8 @@ export const ordersApi = {
     const { data: kotNo } = await supabase.rpc('next_kot_no')
     const orderItems = items.map(item => ({
       orderId: order.id,
-      menuItemId: item.menuItemId,
+      menuItemId: item.menuItemId ?? null,
+      itemName: item.itemName ?? null,   // set for external (static-menu) items
       quantity: item.quantity,
       price: item.price,
       specialRequest: item.note || null,

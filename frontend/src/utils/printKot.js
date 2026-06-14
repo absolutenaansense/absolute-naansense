@@ -203,6 +203,7 @@ export function printBill(order) {
     <div class="c doctitle">TAX INVOICE</div>
     <div class="hr"></div>
     <div>Displayed on ${esc(displayedAt)} IST</div>
+    ${meta.outlet ? `<div>Outlet: ${esc(meta.outlet === 'renusagar' ? 'Renusagar' : 'Renukoot')}</div>` : ''}
     <div>Name: ${esc(custName)}</div>
     ${custPhone ? `<div>Phone: ${esc(custPhone)}</div>` : ''}
     ${meta.address ? `<div>Address: ${esc(meta.address)}</div>` : ''}

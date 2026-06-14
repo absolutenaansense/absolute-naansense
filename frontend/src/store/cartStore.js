@@ -5,6 +5,14 @@ export const useCartStore = create(
   persist(
     (set, get) => ({
       items: {}, // { menuItemId: { item, quantity } }
+      outlet: null, // selected outlet id ('renukoot' | 'renusagar')
+
+      // Switch outlet. Menus/prices differ per outlet, so changing outlet
+      // empties the cart.
+      setOutlet: (outlet) => {
+        if (get().outlet === outlet) return
+        set({ outlet, items: {} })
+      },
 
       addItem: (item) => {
         const { items } = get()
@@ -60,8 +68,11 @@ export const useCartStore = create(
       getItemQuantity: (itemId) => get().items[itemId]?.quantity || 0,
 
       getOrderItems: () => {
+        // External (static, non-DB) items have no MenuItem row, so send them as
+        // open items: menuItemId null + the item name.
         return Object.values(get().items).map(({ item, quantity, note }) => ({
-          menuItemId: item.id,
+          menuItemId: item.external ? null : item.id,
+          itemName: item.external ? item.name : null,
           quantity,
           price: parseFloat(item.price),
           note: note || '',

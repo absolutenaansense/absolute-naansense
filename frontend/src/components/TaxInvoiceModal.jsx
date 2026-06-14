@@ -71,6 +71,7 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
           <div className="border-t border-dashed border-stone-300 my-2" />
 
           <div className="text-stone-500">Displayed on {displayedAt} IST</div>
+          {meta.outlet && <div>Outlet: {meta.outlet === 'renusagar' ? 'Renusagar' : 'Renukoot'}</div>}
           <div>Name: {custName}</div>
           {custPhone && <div>Phone: {custPhone}</div>}
           {meta.address && <div>Address: {meta.address}</div>}

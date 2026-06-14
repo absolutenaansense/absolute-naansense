@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { Phone, Lock, ArrowRight } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '../../services/api'
@@ -10,6 +10,8 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const { setUser } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = location.state?.from || '/'
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -18,7 +20,7 @@ export default function LoginPage() {
       const { data } = await authApi.login(form)
       setUser(data.user, data.token)
       toast.success(`Welcome back, ${data.user.name.split(' ')[0]}!`)
-      navigate('/')
+      navigate(from, { replace: true })
     } catch (err) {
       toast.error(err.response?.data?.error || 'Login failed')
     } finally {
@@ -85,7 +87,7 @@ export default function LoginPage() {
 
           <p className="text-center text-sm text-stone-500 mt-5">
             New here?{' '}
-            <Link to="/register" className="text-brand-500 font-medium hover:text-brand-600">
+            <Link to="/register" state={{ from }} className="text-brand-500 font-medium hover:text-brand-600">
               Create account
             </Link>
           </p>

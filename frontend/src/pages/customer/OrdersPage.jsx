@@ -72,7 +72,7 @@ function OrderCard({ order }) {
           </div>
         </div>
         <div className="text-sm text-stone-600 mb-3">
-          {order.items?.slice(0, 2).map(i => `${i.menuItem?.name} × ${i.quantity}`).join(', ')}
+          {order.items?.slice(0, 2).map(i => `${i.menuItem?.name || i.itemName} × ${i.quantity}`).join(', ')}
           {order.items?.length > 2 && ` +${order.items.length - 2} more`}
         </div>
         {liveStatus === 'cancelled' && (

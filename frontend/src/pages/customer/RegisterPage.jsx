@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { User, Phone, Mail, Lock, ArrowRight, Info } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '../../services/api'
@@ -11,6 +11,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false)
   const { setUser } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
+  const from = location.state?.from || '/'
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -32,7 +34,7 @@ export default function RegisterPage() {
       })
       setUser(data.user, data.token)
       toast.success('Account created! Welcome to Absolute Naansense.')
-      navigate('/')
+      navigate(from, { replace: true })
     } catch (err) {
       toast.error(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Registration failed')
     } finally {
@@ -127,7 +129,7 @@ export default function RegisterPage() {
 
           <p className="text-center text-sm text-stone-500 mt-5">
             Already registered?{' '}
-            <Link to="/login" className="text-brand-500 font-medium hover:text-brand-600">Sign in</Link>
+            <Link to="/login" state={{ from }} className="text-brand-500 font-medium hover:text-brand-600">Sign in</Link>
           </p>
         </div>
       </div>

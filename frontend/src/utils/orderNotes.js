@@ -13,6 +13,13 @@ export function buildOrderNotes({ type, address, itemNotes }) {
   return JSON.stringify({ type: type || null, address: address || null, items })
 }
 
+// Customer order notes: the whole-order special request text + the outlet the
+// order was placed for. Stored as JSON in Order.notes.
+export function buildCustomerNotes({ text, outlet }) {
+  const t = (text || '').trim()
+  return JSON.stringify({ text: t || null, outlet: outlet || null })
+}
+
 // Normalized order metadata, preferring real columns and falling back to the
 // legacy notes JSON for older rows. Use this everywhere instead of reading
 // columns or notes directly.
@@ -26,6 +33,7 @@ export function getOrderMeta(order) {
     phone: order?.customerPhone || n.phone || null,
     note: n.text || null,   // whole-order special request (plain-text notes)
     cancelRemark: n.cancelRemark || null,   // admin's reason when an order is cancelled
+    outlet: n.outlet || null,   // 'renukoot' | 'renusagar'
     itemNotes: n.items || {},
   }
 }
@@ -51,7 +59,7 @@ export function parseOrderNotes(notes) {
   try {
     const o = JSON.parse(notes)
     if (o && typeof o === 'object') {
-      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {}, text: o.text ?? null, cancelRemark: o.cancelRemark ?? null }
+      return { type: o.type ?? null, address: o.address ?? null, items: o.items ?? {}, text: o.text ?? null, cancelRemark: o.cancelRemark ?? null, outlet: o.outlet ?? null }
     }
   } catch {
     // Legacy plain-text note — surface it as a generic order note.

@@ -10,6 +10,7 @@ import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
 import { formatIST } from '../../utils/dateIST'
+import { buildCustomerNotes } from '../../utils/orderNotes'
 import { RESTAURANT } from '../../config/restaurant'
 
 const DELIVERY_FEE = 50 // charged on delivery orders below FREE_DELIVERY_THRESHOLD
@@ -62,7 +63,15 @@ export default function CheckoutPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
-  const { items, addItem, removeItem, deleteItem, setItemNote, clearCart, getTotal, getOrderItems } = useCartStore()
+  const { items, addItem, removeItem, deleteItem, setItemNote, clearCart, getTotal, getOrderItems, outlet } = useCartStore()
+
+  // Browsing is public; placing an order needs an account. Send the user to
+  // sign in and bring them right back to checkout (cart persists in storage).
+  const requireLogin = () => {
+    if (user) return true
+    navigate('/login', { state: { from: '/checkout' } })
+    return false
+  }
 
   const subtotal = getTotal()
   // No delivery charge on take-away orders.
@@ -135,6 +144,7 @@ export default function CheckoutPage() {
   }
 
   const goToPayment = () => {
+    if (!requireLogin()) return
     if (!hoursValid()) return
     if (orderType === 'DELIVERY' && !selectedAddressId) { toast.error('Please select a delivery address'); return }
     if (!pickupValid()) return
@@ -142,6 +152,7 @@ export default function CheckoutPage() {
   }
 
   const openConfirm = () => {
+    if (!requireLogin()) return
     if (!hoursValid()) return
     if (orderType === 'DELIVERY' && !selectedAddressId) { toast.error('Please select a delivery address'); return }
     if (!pickupValid()) return
@@ -149,6 +160,7 @@ export default function CheckoutPage() {
   }
 
   const handlePlaceOrder = async () => {
+    if (!requireLogin()) return
     if (!hoursValid()) return
     if (orderType === 'DELIVERY' && !selectedAddressId) {
       toast.error('Please select a delivery address')
@@ -171,7 +183,7 @@ export default function CheckoutPage() {
         orderType,
         deliveryAddress: addressText,
         pickupAt,
-        notes: orderNote.trim() || null,
+        notes: buildCustomerNotes({ text: orderNote, outlet }),
       })
       // Snapshot the order for the WhatsApp image (cart is cleared right after).
       setPlacedSnapshot({
@@ -230,7 +242,7 @@ export default function CheckoutPage() {
   }
 
   if (Object.keys(items).length === 0 && !orderComplete && !orderPlacedRef.current) {
-    navigate('/')
+    navigate(outlet ? '/menu' : '/')
     return null
   }
 

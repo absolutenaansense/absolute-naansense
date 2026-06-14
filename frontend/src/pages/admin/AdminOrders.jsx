@@ -114,6 +114,9 @@ function OrderCard({ order, refetch, now }) {
             <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusStyle[order.status] || 'bg-stone-100 text-stone-600'}`}>
               {statusLabel(order.status)}
             </span>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-50 text-brand-700">
+              {meta.outlet === 'renusagar' ? 'Renusagar' : 'Renukoot'}
+            </span>
             {order.status === 'payment_received' && (
               <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full animate-pulse">
                 Action needed
@@ -146,7 +149,7 @@ function OrderCard({ order, refetch, now }) {
                 return (
                   <div key={item.id} className="text-sm">
                     <div className="flex justify-between">
-                      <span className="text-stone-700">{item.menuItem?.name} × {item.quantity}</span>
+                      <span className="text-stone-700">{item.menuItem?.name || item.itemName} × {item.quantity}</span>
                       <span className="text-stone-900 font-medium">₹{(parseFloat(item.price) * item.quantity).toFixed(0)}</span>
                     </div>
                     {note && <div className="text-xs text-amber-600 italic pl-1">↳ {note}</div>}
