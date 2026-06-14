@@ -63,10 +63,10 @@ function OrderCard({ order, refetch, now }) {
   const handleConfirm = async () => {
     setLoading(true)
     try {
-      // KOT already auto-printed when the order arrived; confirm just advances it.
       await ordersApi.confirmOrder(order.id)
       await ordersApi.updateStatus(order.id, 'preparing')
-      toast.success('Order confirmed')
+      orderKot(order)   // print the KOT on confirmation
+      toast.success('Order confirmed — KOT printed')
       refetch()
     } catch { toast.error('Failed to confirm') }
     finally { setLoading(false) }
