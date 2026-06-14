@@ -26,10 +26,15 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
   const comp = !!order.isComplimentary
   const discount = comp ? subtotal : Math.min(parseFloat(order.discount || 0), subtotal)
   const taxable = Math.max(0, subtotal - discount)
-  const cgst = comp ? 0 : taxable * CGST_RATE
-  const sgst = comp ? 0 : taxable * SGST_RATE
-  const grand = comp ? 0 : (order.total != null ? parseFloat(order.total) : Math.round(taxable + cgst + sgst))
-  const roundOff = grand - (taxable + cgst + sgst)
+  // GST on items (matches how orders compute it: round(5% of taxable), split into CGST+SGST).
+  const gstTotal = comp ? 0 : Math.round(taxable * (CGST_RATE + SGST_RATE))
+  const cgst = gstTotal / 2
+  const sgst = gstTotal / 2
+  const grand = comp ? 0 : (order.total != null ? parseFloat(order.total) : taxable + gstTotal)
+  // Whatever the grand total has beyond items + GST is the delivery charge
+  // (0 for dine-in/takeaway; the delivery fee for delivery orders).
+  const deliveryCharge = Math.max(0, grand - taxable - gstTotal)
+  const roundOff = grand - (taxable + gstTotal + deliveryCharge)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
 
   const paid = comp ? 'Complimentary'
@@ -115,7 +120,8 @@ export default function TaxInvoiceModal({ order, onClose, printable = false }) {
           {discount > 0 && <div className="flex justify-between"><span /><span>Discount&nbsp;&nbsp;-{money(discount)}</span></div>}
           <div className="flex justify-between"><span /><span>CGST 2.5%&nbsp;&nbsp;{money(cgst)}</span></div>
           <div className="flex justify-between"><span /><span>SGST 2.5%&nbsp;&nbsp;{money(sgst)}</span></div>
-          <div className="flex justify-between"><span /><span>Round off&nbsp;&nbsp;{roundOff >= 0 ? '+' : ''}{money(roundOff)}</span></div>
+          {deliveryCharge > 0 && <div className="flex justify-between"><span /><span>Delivery Charge&nbsp;&nbsp;{money(deliveryCharge)}</span></div>}
+          {Math.abs(roundOff) >= 0.01 && <div className="flex justify-between"><span /><span>Round off&nbsp;&nbsp;{roundOff >= 0 ? '+' : ''}{money(roundOff)}</span></div>}
 
           <div className="border-t border-dashed border-stone-300 my-2" />
           <div className="flex justify-between font-bold text-base"><span>Grand Total</span><span>₹ {grand.toFixed(2)}</span></div>

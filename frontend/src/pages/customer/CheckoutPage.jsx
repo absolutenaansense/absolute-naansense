@@ -6,6 +6,7 @@ import toast from 'react-hot-toast'
 import CustomerLayout from '../../components/customer/CustomerLayout'
 import LiveOrderTracker from '../../components/customer/LiveOrderTracker'
 import PayAheadQR from '../../components/customer/PayAheadQR'
+import { UPI_APPS, UPI_PAYEE, upiLink } from '../../components/customer/payApps'
 import { useCartStore } from '../../store/cartStore'
 import { useAuthStore } from '../../store/authStore'
 import { addressApi, ordersApi } from '../../services/api'
@@ -565,62 +566,28 @@ export default function CheckoutPage() {
               <div className="text-sm font-semibold text-stone-800 mb-1 text-center">Pay ₹{total.toFixed(0)} via UPI</div>
               <div className="text-xs text-stone-400 mb-4 text-center">Tap your preferred app — amount is pre-filled</div>
 
-              {/* UPI Deep Link Buttons */}
+              {/* UPI app buttons */}
               <div className="grid grid-cols-2 gap-3 mb-4">
-                {/* Google Pay */}
-                <a
-                  href={`gpay://upi/pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
-                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-blue-200 rounded-2xl p-3.5 transition-all active:scale-95"
-                >
-                  <svg width="22" height="22" viewBox="0 0 48 48"><path fill="#4285F4" d="M24 9.5c3.9 0 6.6 1.7 8.1 3.1l6-5.8C34.5 3.5 29.7 1 24 1 14.8 1 7 6.8 3.9 14.9l7 5.4C12.6 14 17.8 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.5c0-1.6-.1-2.8-.4-4H24v7.7h12.5c-.5 2.9-2.2 5.4-4.7 7l7.2 5.6c4.2-3.9 6.6-9.6 6.6-16.3z"/><path fill="#FBBC05" d="M10.9 28.6A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.1.7-4.6l-7-5.4A23.1 23.1 0 0 0 .9 24c0 3.7.9 7.2 2.4 10.3l7.6-5.7z"/><path fill="#EA4335" d="M24 47c5.7 0 10.5-1.9 14-5.1l-7.2-5.6c-1.9 1.3-4.3 2.1-6.8 2.1-6.2 0-11.4-4.2-13.1-9.8l-7.6 5.7C7 41.2 14.9 47 24 47z"/></svg>
-                  <span className="text-sm font-semibold text-stone-700">Google Pay</span>
-                </a>
-
-                {/* PhonePe */}
-                <a
-                  href={`phonepe://pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
-                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-purple-200 rounded-2xl p-3.5 transition-all active:scale-95"
-                >
-                  <svg width="22" height="22" viewBox="0 0 48 48"><circle cx="24" cy="24" r="24" fill="#5f259f"/><path fill="white" d="M31 15h-7l-8 18h5l2-4h8l1 4h5zm-6 10 3-7 1 7z"/></svg>
-                  <span className="text-sm font-semibold text-stone-700">PhonePe</span>
-                </a>
-
-                {/* Paytm */}
-                <a
-                  href={`paytmmp://pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
-                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-sky-200 rounded-2xl p-3.5 transition-all active:scale-95"
-                >
-                  <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#00BAF2"/><text x="7" y="32" fontSize="18" fontWeight="bold" fill="white">Pa</text><text x="24" y="32" fontSize="18" fontWeight="bold" fill="#012970">ytm</text></svg>
-                  <span className="text-sm font-semibold text-stone-700">Paytm</span>
-                </a>
-
-                {/* CRED */}
-                <a
-                  href={`credpay://upi/pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
-                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-stone-300 rounded-2xl p-3.5 transition-all active:scale-95"
-                >
-                  <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#0B0B0B"/><text x="9" y="31" fontSize="15" fontWeight="bold" fill="white">CRED</text></svg>
-                  <span className="text-sm font-semibold text-stone-700">CRED</span>
-                </a>
-
-                {/* BHIM / Any UPI */}
-                <a
-                  href={`upi://pay?pa=8299018895@okbizaxis&am=${total.toFixed(2)}&cu=INR`}
-                  className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-orange-200 rounded-2xl p-3.5 transition-all active:scale-95"
-                >
-                  <svg width="22" height="22" viewBox="0 0 48 48"><rect width="48" height="48" rx="8" fill="#FF6B00"/><text x="8" y="30" fontSize="14" fontWeight="bold" fill="white">BHIM</text></svg>
-                  <span className="text-sm font-semibold text-stone-700">BHIM / UPI</span>
-                </a>
+                {UPI_APPS.map(app => (
+                  <a
+                    key={app.name}
+                    href={upiLink(app, total)}
+                    className="flex items-center justify-center gap-2 bg-white border-2 border-stone-100 hover:border-brand-200 rounded-2xl p-3.5 transition-all active:scale-95"
+                  >
+                    <app.Logo />
+                    <span className="text-sm font-semibold text-stone-700">{app.name}</span>
+                  </a>
+                ))}
               </div>
 
               {/* UPI ID as fallback */}
               <div className="bg-stone-50 rounded-xl p-3 flex items-center justify-between">
                 <div>
                   <div className="text-xs text-stone-400">UPI ID (manual)</div>
-                  <div className="text-sm font-mono font-semibold text-stone-800">8299018895@okbizaxis</div>
+                  <div className="text-sm font-mono font-semibold text-stone-800">{UPI_PAYEE}</div>
                 </div>
                 <button
-                  onClick={() => { navigator.clipboard.writeText('8299018895@okbizaxis'); toast.success('UPI ID copied!'); }}
+                  onClick={() => { navigator.clipboard.writeText(UPI_PAYEE); toast.success('UPI ID copied!'); }}
                   className="text-xs text-brand-500 font-medium bg-brand-50 px-3 py-1.5 rounded-lg"
                 >
                   Copy
@@ -742,27 +709,21 @@ export default function CheckoutPage() {
 
                   {/* UPI app buttons */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
-                    {[
-                      { name: 'Google Pay', scheme: 'gpay', path: 'pay', bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200' },
-                      { name: 'PhonePe', scheme: 'phonepe', path: 'pay', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200' },
-                      { name: 'Paytm', scheme: 'paytmmp', path: 'pay', bg: 'bg-sky-50', text: 'text-sky-700', border: 'border-sky-200' },
-                      { name: 'CRED', scheme: 'credpay', path: 'upi/pay', bg: 'bg-stone-100', text: 'text-stone-800', border: 'border-stone-300' },
-                      { name: 'BHIM / UPI', scheme: 'upi', path: 'pay', bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200' },
-                    ].map(app => (
+                    {UPI_APPS.map(app => (
                       <a
-                        key={app.scheme}
-                        href={`${app.scheme}://${app.path}?pa=8299018895@okbizaxis&am=${paidTotal.toFixed(2)}&cu=INR`}
+                        key={app.name}
+                        href={upiLink(app, paidTotal)}
                         onClick={() => setPaymentState('attempted')}
-                        className={`flex items-center justify-center gap-1.5 text-xs font-semibold ${app.bg} ${app.text} border ${app.border} rounded-xl py-3 transition-all active:scale-95`}
-                      >{app.name}</a>
+                        className="flex items-center justify-center gap-2 text-sm font-semibold text-stone-700 bg-white border-2 border-stone-100 hover:border-brand-200 rounded-xl py-2.5 transition-all active:scale-95"
+                      ><app.Logo /> {app.name}</a>
                     ))}
                   </div>
 
                   {/* Manual UPI ID */}
                   <div className="bg-stone-50 rounded-xl p-2.5 flex items-center justify-between mb-3">
-                    <span className="text-xs font-mono text-stone-600">8299018895@okbizaxis</span>
+                    <span className="text-xs font-mono text-stone-600">{UPI_PAYEE}</span>
                     <button
-                      onClick={() => { navigator.clipboard?.writeText('8299018895@okbizaxis'); toast.success('Copied!'); }}
+                      onClick={() => { navigator.clipboard?.writeText(UPI_PAYEE); toast.success('Copied!'); }}
                       className="text-xs text-brand-500 font-medium"
                     >Copy ID</button>
                   </div>

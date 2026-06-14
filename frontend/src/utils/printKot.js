@@ -158,10 +158,12 @@ export function printBill(order) {
   const comp = !!order.isComplimentary
   const discount = comp ? subtotal : Math.min(parseFloat(order.discount || 0), subtotal)
   const taxable = Math.max(0, subtotal - discount)
-  const cgst = comp ? 0 : taxable * CGST_RATE
-  const sgst = comp ? 0 : taxable * SGST_RATE
-  const grand = comp ? 0 : (order.total != null ? parseFloat(order.total) : Math.round(taxable + cgst + sgst))
-  const roundOff = grand - (taxable + cgst + sgst)
+  const gstTotal = comp ? 0 : Math.round(taxable * (CGST_RATE + SGST_RATE))
+  const cgst = gstTotal / 2
+  const sgst = gstTotal / 2
+  const grand = comp ? 0 : (order.total != null ? parseFloat(order.total) : taxable + gstTotal)
+  const deliveryCharge = Math.max(0, grand - taxable - gstTotal)
+  const roundOff = grand - (taxable + gstTotal + deliveryCharge)
   const totalQty = items.reduce((s, it) => s + it.quantity, 0)
 
   const esc = (s) => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
@@ -219,7 +221,8 @@ export function printBill(order) {
     ${discount > 0 ? `<div class="row"><span></span><span>Discount&nbsp;&nbsp;-${money(discount)}</span></div>` : ''}
     <div class="row"><span></span><span>CGST 2.5%&nbsp;&nbsp;${money(cgst)}</span></div>
     <div class="row"><span></span><span>SGST 2.5%&nbsp;&nbsp;${money(sgst)}</span></div>
-    <div class="row"><span></span><span>Round off&nbsp;&nbsp;${roundOff >= 0 ? '+' : ''}${money(roundOff)}</span></div>
+    ${deliveryCharge > 0 ? `<div class="row"><span></span><span>Delivery Charge&nbsp;&nbsp;${money(deliveryCharge)}</span></div>` : ''}
+    ${Math.abs(roundOff) >= 0.01 ? `<div class="row"><span></span><span>Round off&nbsp;&nbsp;${roundOff >= 0 ? '+' : ''}${money(roundOff)}</span></div>` : ''}
     <div class="hr"></div>
     <div class="row grand"><span>Grand Total</span><span>₹ ${grand.toFixed(2)}</span></div>
     <div class="hr"></div>
